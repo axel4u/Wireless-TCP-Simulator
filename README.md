@@ -103,7 +103,7 @@ main.py
 
 1. Packet and channel foundation — complete.
 2. Reliable delivery with RTO and cumulative ACKs — complete.
-3. **TCP NewReno baseline — implemented; local validation pending.**
+3. **TCP NewReno baseline — implemented and locally validated (20 tests passed before Milestone 4).**
 4. Wireless-aware recovery — initial rule-based timeout policy implemented; live telemetry and broader validation remain.
 5. Experiment runner — controlled scenarios, fixed seeds, metrics, repeated trials.
 6. Streamlit + Plotly dashboard.
