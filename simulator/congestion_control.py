@@ -31,7 +31,9 @@ class CongestionController:
             return
         self.duplicate_acks = 0
         if self.state == self.SLOW_START:
-            self.cwnd_packets += newly_acked
+            # Slow Start increases cwnd by at most one MSS per ACK,
+            # even when a cumulative ACK covers multiple packets.
+            self.cwnd_packets += min(float(newly_acked), 1.0)
             if self.cwnd_packets >= self.ssthresh_packets:
                 self.state = self.CONGESTION_AVOIDANCE
         elif self.state == self.CONGESTION_AVOIDANCE:
@@ -52,9 +54,17 @@ class CongestionController:
             return True
         return False
 
-    def on_partial_ack(self) -> None:
-        """NewReno partial ACK: remain in recovery and deflate by retransmitting."""
-        self.cwnd_packets = self.ssthresh_packets + 3.0
+    def on_partial_ack(self, newly_acked: int) -> None:
+        """Process a NewReno partial ACK while remaining in fast recovery.
+
+        Deflate the window by newly acknowledged packets, then add one packet
+        (one MSS) to account for the packet retransmitted immediately.
+        """
+        if newly_acked < 1:
+            return
+        self.cwnd_packets = max(
+            1.0, self.cwnd_packets - float(newly_acked) + 1.0
+        )
         self.state = self.FAST_RECOVERY
         self.duplicate_acks = 0
 
