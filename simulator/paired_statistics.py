@@ -141,9 +141,19 @@ def paired_analysis(
             n = len(diffs)
             mean_diff = statistics.mean(diffs) if n else math.nan
             median_diff = statistics.median(diffs) if n else math.nan
-            wins = sum(d < 0 for d in diffs) if metric != "goodput_mbps" else sum(d > 0 for d in diffs)
-            losses = sum(d > 0 for d in diffs) if metric != "goodput_mbps" else sum(d < 0 for d in diffs)
-            ties = sum(d == 0 for d in diffs)
+            if metric == "goodput_mbps":
+                wins = sum(d > 0 for d in diffs)
+                losses = sum(d < 0 for d in diffs)
+                ties = sum(d == 0 for d in diffs)
+                direction_note = "positive delta is better"
+            elif metric in ("final_cwnd_packets", "final_ssthresh_packets"):
+                wins = losses = ties = 0
+                direction_note = "descriptive only; no universally better direction"
+            else:
+                wins = sum(d < 0 for d in diffs)
+                losses = sum(d > 0 for d in diffs)
+                ties = sum(d == 0 for d in diffs)
+                direction_note = "negative delta is better"
             if n > 1:
                 sd = statistics.stdev(diffs)
                 se = sd / math.sqrt(n)
@@ -170,6 +180,7 @@ def paired_analysis(
                 "equal_seeds": ties,
                 "worsened_seeds": losses,
                 "exact_sign_test_p_value_two_sided": _exact_sign_test(wins, losses),
-                "note": "Goodput improvement means positive delta; all other listed metrics use negative delta. Paired tests are conditional on both runs succeeding.",
+                "direction_note": direction_note,
+                "note": "Paired tests are conditional on both runs succeeding; cwnd and ssthresh are descriptive, not scored as better or worse.",
             })
     return paired_rows, report
