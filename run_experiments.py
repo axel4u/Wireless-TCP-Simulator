@@ -14,6 +14,7 @@ from simulator.burst_loss import GilbertElliottLoss
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
 from simulator.paired_statistics import paired_analysis
+from simulator.independent_statistics import independent_sample_analysis
 from simulator.receiver import Receiver
 from simulator.sender import Sender
 
@@ -237,6 +238,7 @@ def main() -> None:
     write_csv(summary_path, summaries)
     paired_path = args.output_dir / "paired_seed_comparisons.csv"
     statistical_path = args.output_dir / "paired_statistical_report.csv"
+    independent_path = args.output_dir / "independent_sample_report.csv"
     statistical_report = []
     if args.channel_model == "independent":
         paired_rows, statistical_report = paired_analysis(rows)
@@ -245,6 +247,8 @@ def main() -> None:
     else:
         paired_path.unlink(missing_ok=True)
         statistical_path.unlink(missing_ok=True)
+        independent_report = independent_sample_analysis(rows)
+        write_csv(independent_path, independent_report)
 
     print("\n=== Multi-seed Wireless TCP Experiment ===")
     print(f"Seeds                 : {args.start_seed}..{args.start_seed + args.seeds - 1}")
@@ -275,6 +279,16 @@ def main() -> None:
         print("\nPaired comparison (delta = comparison minus baseline):")
     else:
         print("\nPaired statistical analysis: skipped (burst streams are not paired).")
+        print(f"Independent-sample Welch report: {independent_path}")
+        print("Welch comparisons (successful independent runs):")
+        for item in independent_report:
+            if item["metric"] in ("completion_time_ms", "goodput_mbps", "timeouts"):
+                print(
+                    f"  {item['comparison']} / {item['metric']}: "
+                    f"mean difference={item['mean_difference_comparison_minus_baseline']:.3f}, "
+                    f"95% CI=[{item['ci95_low_difference']:.3f}, {item['ci95_high_difference']:.3f}], "
+                    f"Welch p={item['welch_t_p_value_two_sided']:.6g}"
+                )
     for item in statistical_report:
         if item["metric"] in ("completion_time_ms", "goodput_mbps", "timeouts"):
             print(
