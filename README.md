@@ -4,7 +4,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 11 (robustness and congestion-safety validation)
+## Current status — Milestone 12 (sensitivity analysis completed)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -182,8 +182,9 @@ The dashboard's signal-strength and queue-delay values are simulated inputs, not
 8. Interactive packet-level flow visualization — initial version implemented.
 9. Gilbert–Elliott burst-loss channel model — initial implementation added.
 10. Shared time-indexed burst trace and paired experiment evaluation — implemented.
-11. Robustness and congestion-safety validation — implementation added; awaiting local test and experiment verification.
-12. Parameter sweeps, final documentation, and optional comparison with an established network simulator if required.
+11. Robustness and congestion-safety validation — implemented and locally verified.
+12. Signal-strength / queue-delay sensitivity sweep — implemented and executed.
+13. Final report integration and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
 
@@ -254,3 +255,117 @@ Expected decision boundaries with thresholds -80 dBm and 40 ms:
 - queue delay at or above 40 ms: CONGESTION regardless of signal.
 
 This is a sensitivity study of simulated inputs, not calibration against measured Wi-Fi telemetry. The baseline is rerun at each grid point so each comparison uses the same seed and channel timeline.
+
+
+## Consolidated experimental results (Milestones 10–12)
+
+This section records the latest reported multi-seed results for reproducibility. These are results from the simulator's shared time-indexed Gilbert–Elliott channel abstraction; they are not measurements from a physical Wi-Fi network.
+
+### Experiment A: 100-seed shared-time burst-loss comparison
+
+Configuration:
+- 100 seeds; 3 scenarios; 300 simulation runs.
+- Gilbert–Elliott parameters: GOOD→BAD 0.02, BAD→GOOD 0.25, GOOD-state loss 0.01, BAD-state loss 0.80.
+- Shared time-indexed trace; 30 packets per run.
+- All three scenarios completed 100/100 runs.
+
+| Metric | NewReno-style baseline | Adaptive wireless |
+|---|---:|---:|
+| Mean completion time | 758.500 ms | 632.000 ms |
+| Mean goodput | 0.497 Mbps | 0.531 Mbps |
+| Mean retransmissions | 3.010 | 2.700 |
+| Mean timeouts | 2.810 | 2.300 |
+| Mean packet drops | 4.670 | 4.380 |
+| Mean final cwnd | 6.590 | 8.936 |
+
+Paired differences (adaptive wireless minus baseline):
+
+| Metric | Mean difference | 95% confidence interval | Paired t-test p-value |
+|---|---:|---|---:|
+| Completion time | -126.5 ms | [-191.173, -61.827] | 0.000188 |
+| Goodput | +0.034 Mbps | [+0.018, +0.050] | 0.000045 |
+| Timeouts | -0.510 | [-0.951, -0.069] | 0.023858 |
+
+For this configuration, completion time, goodput, and timeout differences were statistically significant at the 5% level. Goodput and completion time are mathematically related when delivered payload is fixed, so they are not independent evidence. The result supports a simulator-specific finding, not a real-Wi-Fi performance claim.
+
+### Experiment B: 30-seed robustness / congestion-safety comparison
+
+Configuration:
+- 30 seeds; 3 scenarios; 90 simulation runs.
+- Shared time-indexed Gilbert–Elliott trace.
+- Adaptive wireless input: weak signal and 39 ms queue delay.
+- Adaptive congestion input: weak signal and 40 ms queue delay.
+- All scenarios completed 30/30 runs.
+
+| Metric | Baseline | Adaptive wireless |
+|---|---:|---:|
+| Mean completion time | 728.333 ms | 593.333 ms |
+| Mean goodput | 0.498 Mbps | 0.544 Mbps |
+| Mean retransmissions | 2.600 | 2.300 |
+| Mean timeouts | 2.567 | 1.967 |
+
+Paired analysis for the wireless condition:
+- Completion time: -135 ms; 95% CI [-243.993, -26.007]; p=0.016966.
+- Goodput: +0.0464 Mbps; 95% CI [+0.0115, +0.0813]; p=0.010875.
+- Retransmissions: -0.30; p=0.402130 (not statistically significant).
+- Timeouts: -0.60; p=0.080067 (not statistically significant).
+
+The congestion-fallback scenario matched the baseline. This confirms the tested policy branch retained standard congestion handling at the configured queue-delay threshold.
+
+### Experiment C: 3 × 3 signal / queue-delay sensitivity sweep
+
+Reproduction command:
+
+~~~powershell
+python run_sensitivity.py --seeds 30 --signals=-79,-80,-81 --queue-delays=39,40,41 --congestion-queue-threshold-ms 40 --weak-signal-threshold-db -80 --output-dir results/sensitivity
+~~~
+
+The sweep executed 540 simulations: 9 input combinations × 30 seeds × 2 scenarios. All 30 runs per scenario/grid point completed successfully.
+
+Policy classification:
+
+| Queue delay | -79 dBm | -80 dBm | -81 dBm |
+|---|---|---|---|
+| 39 ms | Uncertain | Likely wireless | Likely wireless |
+| 40 ms | Likely congestion | Likely congestion | Likely congestion |
+| 41 ms | Likely congestion | Likely congestion | Likely congestion |
+
+At the two wireless-classified grid points (-80 dBm / 39 ms and -81 dBm / 39 ms), the adaptive means were 593.333 ms completion time and 0.544126 Mbps goodput, compared with baseline means of 728.333 ms and 0.497722 Mbps. Paired p-values were 0.016966 for completion time and 0.010875 for goodput. The two grid points activate the same threshold-based policy branch and therefore are not independent replications.
+
+At the uncertain point (-79 dBm / 39 ms) and all congestion points (queue delay 40 or 41 ms), adaptive results were identical to baseline. This demonstrates the configured classification and fallback behaviour, not that the chosen thresholds are universally optimal.
+
+### Reproducibility commands
+
+100-seed shared-time burst experiment:
+
+~~~powershell
+python run_experiments.py --seeds 100 --channel-model burst --loss-mode random --burst-trace-mode shared-time --good-to-bad 0.02 --bad-to-good 0.25 --good-loss 0.01 --bad-loss 0.80 --output-dir results/burst-shared-time
+~~~
+
+30-seed boundary experiment:
+
+~~~powershell
+python run_experiments.py --seeds 30 --channel-model burst --loss-mode random --burst-trace-mode shared-time --signal-db -95 --wireless-queue-delay-ms 39 --congestion-queue-delay-ms 40 --congestion-queue-threshold-ms 40 --weak-signal-threshold-db -80 --output-dir results/robustness-boundary
+~~~
+
+Sensitivity experiment:
+
+~~~powershell
+python run_sensitivity.py --seeds 30 --signals=-79,-80,-81 --queue-delays=39,40,41 --congestion-queue-threshold-ms 40 --weak-signal-threshold-db -80 --output-dir results/sensitivity
+~~~
+
+Run the local test suite after pulling repository changes:
+
+~~~powershell
+python -m pytest -q
+~~~
+
+### Interpretation and reporting cautions
+
+- These results are specific to the simulator, its simplified NewReno-style implementation, selected parameters, and shared time-indexed channel abstraction.
+- The signal and queue-delay inputs are simulated values, not live Wi-Fi telemetry.
+- The adaptive classifier is rule-based; it is not a machine-learning model.
+- Congestion evidence takes priority over weak signal; uncertain conditions use standard timeout recovery.
+- The shared trace aligns channel state by virtual-time slot, but does not recreate a measured physical RF trace or guarantee identical packet schedules.
+- Report seed counts, successful-run counts, configuration, variability, confidence intervals, and limitations alongside performance results.
+- Do not describe the experiments as proof of real-world Wi-Fi improvement. Physical-network or NS-3 validation remains future work.
