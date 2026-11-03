@@ -198,7 +198,7 @@ def make_packet_animation(events: list[str]):
                                  "fromcurrent": True}]},
                 {"label": "❚❚ Pause", "method": "animate",
                  "args": [[None], {"mode": "immediate", "frame": {"duration": 0},
-                                   "transition": {"duration": 0}]}},
+                                   "transition": {"duration": 0}}]},
             ],
         }],
         sliders=[{
