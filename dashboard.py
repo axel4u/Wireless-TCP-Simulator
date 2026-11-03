@@ -136,6 +136,7 @@ def make_window_chart(history: list[tuple[float, float, str]], title: str):
     frame = pd.DataFrame(
         history, columns=["Time (ms)", "Congestion window (packets)", "TCP state"]
     )
+    frame = frame.sort_values("Time (ms)").reset_index(drop=True)
     figure = px.line(
         frame,
         x="Time (ms)",
@@ -143,6 +144,9 @@ def make_window_chart(history: list[tuple[float, float, str]], title: str):
         color="TCP state",
         markers=True,
         title=title,
+        animation_frame=frame.index,
+        range_x=[0, max(frame["Time (ms)"].max(), 1)],
+        range_y=[0, max(frame["Congestion window (packets)"].max() * 1.15, 1)],
     )
     figure.update_layout(
         template="plotly_dark", paper_bgcolor="#101923", plot_bgcolor="#101923",
