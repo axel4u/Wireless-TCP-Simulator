@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import math
+import re
+
+import plotly.graph_objects as go
 
 import pandas as pd
 import plotly.express as px
@@ -94,6 +97,7 @@ def run_simulation(
         "congestion_recoveries": sender.congestion_recovery_count,
         "window_history": sender.window_history,
         "adaptive_decisions": sender.adaptive_decisions,
+        "channel_events": channel.events,
         "error": error,
     }
 
@@ -112,6 +116,105 @@ def make_window_chart(history: list[tuple[float, float, str]], title: str):
     )
     figure.update_layout(legend_title_text="TCP state", hovermode="x unified")
     return figure
+
+
+
+def make_packet_animation(events: list[str]):
+    """Build a step-by-step packet journey from the channel's recorded events."""
+    pattern = re.compile(
+        r"^\\s*([0-9.]+) ms \\| (DATA|ACK) seq=(\\d+) (SENT|DROPPED|DELIVERED)$"
+    )
+    parsed = []
+    for raw in events:
+        match = pattern.match(raw)
+        if not match:
+            continue
+        time_ms, packet_type, sequence, action = match.groups()
+        if action == "SENT":
+            x, status = 1, "Entered wireless channel"
+        elif action == "DROPPED":
+            x, status = 1, "Dropped by wireless channel"
+        else:
+            x = 2 if packet_type == "DATA" else 0
+            status = "Arrived at receiver" if packet_type == "DATA" else "ACK arrived at sender"
+        parsed.append({
+            "time_ms": float(time_ms),
+            "packet_type": packet_type,
+            "sequence": int(sequence),
+            "action": action,
+            "x": x,
+            "status": status,
+            "label": f"{packet_type} #{sequence}",
+        })
+
+    if not parsed:
+        return None, pd.DataFrame()
+
+    frames = []
+    for index, event in enumerate(parsed):
+        frames.append(go.Frame(
+            name=str(index),
+            data=[go.Scatter(
+                x=[event["x"]], y=[0], mode="markers+text",
+                marker={"size": 25, "symbol": "x" if event["action"] == "DROPPED" else "circle"},
+                text=[event["label"]], textposition="top center",
+                hovertemplate=(
+                    f"{event['label']}<br>{event['status']}<br>"
+                    f"Time: {event['time_ms']:.2f} ms<extra></extra>"
+                ),
+            )],
+            layout=go.Layout(title_text=(
+                f"Step {index + 1}/{len(parsed)} · {event['label']} · "
+                f"{event['status']} · {event['time_ms']:.2f} ms"
+            )),
+        ))
+
+    first = parsed[0]
+    figure = go.Figure(
+        data=[go.Scatter(
+            x=[first["x"]], y=[0], mode="markers+text",
+            marker={"size": 25, "symbol": "x" if first["action"] == "DROPPED" else "circle"},
+            text=[first["label"]], textposition="top center",
+        )],
+        frames=frames,
+    )
+    figure.update_layout(
+        title=f"Packet journey · {len(parsed)} channel events",
+        xaxis={
+            "range": [-0.35, 2.35], "tickmode": "array",
+            "tickvals": [0, 1, 2],
+            "ticktext": ["Sender", "Wireless channel", "Receiver"],
+            "fixedrange": True,
+        },
+        yaxis={"range": [-1, 1], "visible": False, "fixedrange": True},
+        height=340,
+        showlegend=False,
+        updatemenus=[{
+            "type": "buttons", "showactive": False, "x": 0.05, "y": -0.18,
+            "buttons": [
+                {"label": "▶ Play", "method": "animate",
+                 "args": [None, {"frame": {"duration": 450, "redraw": True},
+                                 "transition": {"duration": 150},
+                                 "fromcurrent": True}]},
+                {"label": "❚❚ Pause", "method": "animate",
+                 "args": [[None], {"mode": "立即", "frame": {"duration": 0},
+                                   "transition": {"duration": 0}]}},
+            ],
+        }],
+        sliders=[{
+            "active": 0, "y": -0.05, "x": 0.15, "len": 0.82,
+            "steps": [{
+                "label": str(i + 1), "method": "animate",
+                "args": [[str(i)], {"mode": "immediate",
+                                    "frame": {"duration": 0, "redraw": True},
+                                    "transition": {"duration": 0}}],
+            } for i in range(len(parsed))],
+        }],
+        margin={"b": 100},
+    )
+    event_frame = pd.DataFrame(parsed)
+    return figure, event_frame
+
 
 
 st.set_page_config(
@@ -286,6 +389,33 @@ else:
             title="Goodput (higher is better)",
         )
         st.plotly_chart(figure, width="stretch")
+
+
+    st.subheader("Interactive packet transmission")
+    st.caption(
+        "Play the recorded channel events step by step. DATA travels sender → "
+        "wireless channel → receiver; ACK travels in the reverse direction. "
+        "A dropped marker shows a packet lost at the channel."
+    )
+    animation_label = st.selectbox(
+        "Choose packet-flow scenario", list(SCENARIOS), key="packet_animation_scenario"
+    )
+    animation_result = results[animation_label]
+    packet_figure, packet_events = make_packet_animation(
+        animation_result["channel_events"]
+    )
+    if packet_figure is not None:
+        st.plotly_chart(packet_figure, width="stretch")
+        display_events = packet_events[
+            ["time_ms", "packet_type", "sequence", "action", "status"]
+        ].rename(columns={
+            "time_ms": "Time (ms)", "packet_type": "Packet",
+            "sequence": "Sequence", "action": "Channel event", "status": "Meaning",
+        })
+        with st.expander("View complete packet event log"):
+            st.dataframe(display_events, hide_index=True, width="stretch")
+    else:
+        st.info("No channel events were recorded for this run.")
 
     st.subheader("Congestion-window behaviour")
     selected_label = st.selectbox("Choose a scenario trace", list(SCENARIOS))
