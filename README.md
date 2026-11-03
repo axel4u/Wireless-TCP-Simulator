@@ -83,6 +83,7 @@ simulator/
   congestion_control.py
   event_scheduler.py
   loss_trace.py
+  paired_statistics.py
   packet.py
   receiver.py
   sender.py
@@ -91,6 +92,7 @@ tests/
   test_adaptive_sender.py
   test_channel.py
   test_loss_trace.py
+  test_paired_statistics.py
   test_sender.py
 main.py
 ~~~
