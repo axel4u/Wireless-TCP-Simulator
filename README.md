@@ -11,7 +11,7 @@ Implemented:
 - DATA and cumulative ACK packet model.
 - Wireless channel with configurable independent random packet loss, propagation delay, and an optional two-state Gilbert–Elliott burst-loss model.
 - Optional packet-keyed shared loss trace for repeatable cross-algorithm comparisons.
-- Multi-seed experiment runner with per-seed paired comparisons, confidence intervals, paired t-tests, and exact sign tests.
+- Multi-seed experiment runner with independent-loss paired comparisons and exploratory seed-matched burst-loss summaries.
 - Receiver with out-of-order buffering and cumulative ACK generation.
 - Sliding-window sender with a single retransmission timer for the oldest unacknowledged packet.
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
@@ -20,7 +20,7 @@ Implemented:
 - Interactive Streamlit + Plotly dashboard for scenario comparison, metrics, congestion-window history, and recovery decisions.
 - Step-by-step packet-flow animation built from the simulator's recorded DATA/ACK channel events, including visible packet drops and reverse-direction ACK delivery.
 
-The congestion window is expressed in packet/MSS units. The model uses a fixed RTO and does not yet model RTT estimation, delayed ACKs, receiver-advertised windows, packet queueing, burst-error channels, or all TCP NewReno edge cases.
+The congestion window is expressed in packet/MSS units. The model uses a fixed RTO and does not yet model RTT estimation, delayed ACKs, receiver-advertised windows, explicit packet queueing, detailed RF fading, or all TCP NewReno edge cases.
 
 ## Requirements
 
@@ -77,7 +77,7 @@ python main.py --packets 30 --loss 0.10 --seed 7
 
 The independent-loss model samples each transmission attempt separately. The optional Gilbert–Elliott model switches between GOOD and BAD channel states: each state has its own packet-loss probability, and transition probabilities control how long the channel tends to remain in each state. This creates temporally correlated losses and makes consecutive packet drops possible. The model is a simplified statistical channel abstraction, not a measured RF/fading model. Its initial state is GOOD and it is seeded for repeatability.
 
-The dashboard lets you select independent random loss or burst loss. For burst mode, runs use a seeded sequential random stream; because the algorithms can make different numbers of transmission attempts, outcomes are not strictly paired packet-by-packet. Use repeated seeds and report this limitation when comparing algorithms.
+The dashboard lets you select independent random loss or burst loss. The multi-seed runner also supports `--channel-model burst --loss-mode random`. Burst-mode runs use seeded sequential random streams; because the algorithms can make different numbers of transmission attempts, outcomes are not strictly paired packet-by-packet. The runner still writes seed-matched exploratory deltas, but its paired-test p-values must not be treated as confirmatory evidence for burst mode. Prefer scenario means, standard deviations, and success rates, and state this limitation in reports.
 
 ## Adaptive policy assumptions
 
@@ -123,6 +123,7 @@ Useful options:
 python run_experiments.py --seeds 50 --start-seed 1 --packets 30 --loss 0.10
 python run_experiments.py --seeds 10 --start-seed 100 --loss-mode random
 python run_experiments.py --seeds 30 --output-dir results/low-loss --loss 0.05
+python run_experiments.py --seeds 30 --channel-model burst --loss-mode random --output-dir results/burst-loss
 ~~~
 
 Output files (created automatically):
