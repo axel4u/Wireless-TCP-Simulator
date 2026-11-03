@@ -444,54 +444,71 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.markdown("### Experiment setup")
-    st.caption("Configure network conditions and recovery inputs.")
-    packets = st.slider("DATA packets", min_value=5, max_value=100, value=30, step=5)
-    channel_model = st.selectbox(
-        "Wireless channel model",
-        options=["independent", "burst"],
-        format_func=lambda value: "Independent random loss" if value == "independent" else "Burst loss (Gilbert–Elliott)",
-    )
-    loss = st.slider(
-        "Packet loss probability (independent mode)", min_value=0.0, max_value=0.50,
-        value=0.10, step=0.01, format="%.2f",
-        disabled=channel_model == "burst",
-    )
-    if channel_model == "burst":
-        burst_trace_mode = st.selectbox(
-            "Burst trace mode",
-            options=["shared-time", "sequential"],
-            format_func=lambda value: "Shared time-indexed trace (recommended)" if value == "shared-time" else "Sequential per-run stream",
+@st.dialog("Experiment setup", width="large")
+def experiment_setup_dialog():
+    st.caption("Configure the network conditions and recovery inputs for this run.")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Traffic and channel")
+        st.slider("DATA packets", min_value=5, max_value=100, value=30, step=5, key="cfg_packets")
+        st.selectbox(
+            "Wireless channel model",
+            options=["independent", "burst"],
+            format_func=lambda value: "Independent random loss" if value == "independent" else "Burst loss (Gilbert–Elliott)",
+            key="cfg_channel_model",
         )
-        st.subheader("Gilbert–Elliott parameters")
-        good_loss = st.slider("GOOD-state loss", 0.0, 1.0, 0.01, 0.01)
-        bad_loss = st.slider("BAD-state loss", 0.0, 1.0, 0.80, 0.01)
-        good_to_bad = st.slider("GOOD → BAD transition", 0.0, 1.0, 0.02, 0.01)
-        bad_to_good = st.slider("BAD → GOOD transition", 0.0, 1.0, 0.25, 0.01)
-    else:
-        burst_trace_mode = "shared-time"
-        good_loss, bad_loss, good_to_bad, bad_to_good = 0.01, 0.80, 0.02, 0.25
-    delay_ms = st.slider(
-        "One-way propagation delay (ms)", 0.0, 200.0, 25.0, 5.0
-    )
-    rto_ms = st.slider(
-        "Retransmission timeout (ms)", 20.0, 500.0, 100.0, 10.0
-    )
-    seed = st.number_input("Random seed", min_value=0, max_value=1_000_000, value=7)
+        st.slider(
+            "Packet loss probability (independent mode)", min_value=0.0, max_value=0.50,
+            value=0.10, step=0.01, format="%.2f",
+            disabled=st.session_state.get("cfg_channel_model", "independent") == "burst",
+            key="cfg_loss",
+        )
+        st.slider("One-way propagation delay (ms)", 0.0, 200.0, 25.0, 5.0, key="cfg_delay_ms")
+        st.slider("Retransmission timeout (ms)", 20.0, 500.0, 100.0, 10.0, key="cfg_rto_ms")
+        st.number_input("Random seed", min_value=0, max_value=1_000_000, value=7, key="cfg_seed")
+    with right:
+        st.markdown("#### Simulated link measurements")
+        st.slider("Signal strength (dBm)", min_value=-110, max_value=-30, value=-95, step=1, key="cfg_signal_dbm")
+        st.slider("Queueing delay (ms)", min_value=0, max_value=150, value=5, step=1, key="cfg_queue_delay_ms")
+        st.caption("These are controlled simulator inputs, not measurements from your computer's Wi-Fi adapter.")
+        if st.session_state.get("cfg_channel_model", "independent") == "burst":
+            st.divider()
+            st.markdown("#### Gilbert–Elliott burst parameters")
+            st.selectbox(
+                "Burst trace mode",
+                options=["shared-time", "sequential"],
+                format_func=lambda value: "Shared time-indexed trace (recommended)" if value == "shared-time" else "Sequential per-run stream",
+                key="cfg_burst_trace_mode",
+            )
+            st.slider("GOOD-state loss", 0.0, 1.0, 0.01, 0.01, key="cfg_good_loss")
+            st.slider("BAD-state loss", 0.0, 1.0, 0.80, 0.01, key="cfg_bad_loss")
+            st.slider("GOOD → BAD transition", 0.0, 1.0, 0.02, 0.01, key="cfg_good_to_bad")
+            st.slider("BAD → GOOD transition", 0.0, 1.0, 0.25, 0.01, key="cfg_bad_to_good")
     st.divider()
-    st.subheader("Simulated link measurements")
-    signal_dbm = st.slider(
-        "Signal strength (dBm)", min_value=-110, max_value=-30, value=-95, step=1
-    )
-    queue_delay_ms = st.slider(
-        "Queueing delay (ms)", min_value=0, max_value=150, value=5, step=1
-    )
-    st.caption(
-        "These are controlled simulator inputs, not measurements from your "
-        "computer's Wi-Fi adapter."
-    )
-    run_button = st.button("Run comparison", type="primary", width="stretch")
+    if st.button("Run simulation comparison", type="primary", width="stretch"):
+        st.session_state["run_comparison_requested"] = True
+
+if st.button("Experiment setup  ·  Configure and run", type="primary"):
+    experiment_setup_dialog()
+
+packets = st.session_state.get("cfg_packets", 30)
+channel_model = st.session_state.get("cfg_channel_model", "independent")
+loss = st.session_state.get("cfg_loss", 0.10)
+delay_ms = st.session_state.get("cfg_delay_ms", 25.0)
+rto_ms = st.session_state.get("cfg_rto_ms", 100.0)
+seed = st.session_state.get("cfg_seed", 7)
+signal_dbm = st.session_state.get("cfg_signal_dbm", -95)
+queue_delay_ms = st.session_state.get("cfg_queue_delay_ms", 5)
+if channel_model == "burst":
+    burst_trace_mode = st.session_state.get("cfg_burst_trace_mode", "shared-time")
+    good_loss = st.session_state.get("cfg_good_loss", 0.01)
+    bad_loss = st.session_state.get("cfg_bad_loss", 0.80)
+    good_to_bad = st.session_state.get("cfg_good_to_bad", 0.02)
+    bad_to_good = st.session_state.get("cfg_bad_to_good", 0.25)
+else:
+    burst_trace_mode = "shared-time"
+    good_loss, bad_loss, good_to_bad, bad_to_good = 0.01, 0.80, 0.02, 0.25
+run_button = st.session_state.pop("run_comparison_requested", False)
 
 with st.expander("Channel model and comparison method", expanded=False):
     st.markdown(
