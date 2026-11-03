@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import statistics
 from pathlib import Path
@@ -138,12 +139,13 @@ def run_one(
         "measured_loss_rate": channel.dropped_count / channel.sent_count if channel.sent_count else 0.0,
         "good_state_attempts": burst_stats.good_state_attempts if burst_stats else "",
         "bad_state_attempts": burst_stats.bad_state_attempts if burst_stats else "",
-        "good_state_occupancy_pct": 100.0 * burst_stats.good_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
-        "bad_state_occupancy_pct": 100.0 * burst_stats.bad_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
+        "good_state_attempt_share_pct": 100.0 * burst_stats.good_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
+        "bad_state_attempt_share_pct": 100.0 * burst_stats.bad_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
         "final_cwnd_packets": sender.cwnd_packets,
         "final_ssthresh_packets": sender.ssthresh_packets,
         "wireless_recoveries": sender.wireless_recovery_count,
         "congestion_recoveries": sender.congestion_recovery_count,
+        "channel_transmission_records": json.dumps(channel.transmission_records),
         "simulation_time_ms": scheduler.now_ms,
         "error": error_message,
     }
