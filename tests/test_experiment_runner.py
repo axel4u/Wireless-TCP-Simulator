@@ -128,3 +128,24 @@ def test_same_seed_scenarios_use_same_shared_time_channel_state_timeline():
     adaptive_trace = SharedBurstLossTrace(seed=71)
     for time_ms in (0, 1, 10, 25, 50, 100, 250):
         assert baseline_trace.state_at(time_ms) == adaptive_trace.state_at(time_ms)
+
+
+
+def test_experiment_runner_exposes_policy_thresholds_and_records_inputs():
+    row = run_one(
+        "adaptive_wireless",
+        seed=91,
+        packets=8,
+        loss=0.0,
+        signal_dbm=-85.0,
+        wireless_queue_delay_ms=19.0,
+        congestion_queue_threshold_ms=20.0,
+        weak_signal_threshold_dbm=-82.0,
+    )
+
+    assert row["signal_dbm"] == -85.0
+    assert row["queue_delay_ms"] == 19.0
+    assert row["congestion_queue_threshold_ms"] == 20.0
+    assert row["weak_signal_threshold_dbm"] == -82.0
+    assert row["delivery_success"] is True
+    assert row["wireless_recoveries"] == 0
