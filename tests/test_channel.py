@@ -110,3 +110,42 @@ def test_burst_model_reports_state_occupancy_and_measured_loss():
     assert model.bad_state_attempts == 0
     assert model.drop_count == sum(outcomes)
     assert model.measured_loss_rate == 1.0
+
+
+def test_shared_burst_trace_is_time_indexed_and_order_independent():
+    from simulator.packet import PacketType
+    from simulator.shared_burst_trace import SharedBurstLossTrace
+
+    first = SharedBurstLossTrace(seed=41)
+    second = SharedBurstLossTrace(seed=41)
+    first_states = {time: first.state_at(time) for time in (0, 5, 10, 25, 50)}
+    for time in (50, 10, 0, 25, 5):
+        assert second.state_at(time) == first_states[time]
+
+    a = first.should_drop(10, PacketType.DATA, 7, 1)
+    b = second.should_drop(10, PacketType.DATA, 7, 1)
+    assert a == b
+
+
+def test_channel_records_shared_burst_state_and_drop_decision():
+    from simulator.shared_burst_trace import SharedBurstLossTrace
+
+    scheduler = EventScheduler()
+    trace = SharedBurstLossTrace(
+        good_to_bad_probability=0.0,
+        bad_to_good_probability=1.0,
+        good_state_loss_probability=0.0,
+        bad_state_loss_probability=0.0,
+        seed=2,
+    )
+    channel = WirelessChannel(scheduler, shared_burst_trace=trace)
+    packet = Packet(PacketType.DATA, 0, 1000, 0)
+    channel.transmit(packet, lambda _: None)
+    assert channel.transmission_records == [{
+        "time_ms": 0.0,
+        "packet_type": "DATA",
+        "sequence_number": 0,
+        "attempt_number": 1,
+        "channel_state": "GOOD",
+        "dropped": False,
+    }]
