@@ -58,7 +58,7 @@ def run_sweep(args: argparse.Namespace) -> tuple[list[dict[str, Any]], list[dict
         for queue_delay in args.queue_delays:
             classification = classify_grid_point(
                 signal, queue_delay, args.congestion_queue_threshold_ms,
-                args.weak_signal_threshold_dbm,
+                args.weak_signal_threshold_db,
             )
             paired_rows: list[dict[str, Any]] = []
             for seed in range(args.start_seed, args.start_seed + args.seeds):
@@ -70,7 +70,7 @@ def run_sweep(args: argparse.Namespace) -> tuple[list[dict[str, Any]], list[dict
                     good_state_loss_probability=args.good_loss,
                     bad_state_loss_probability=args.bad_loss,
                     congestion_queue_threshold_ms=args.congestion_queue_threshold_ms,
-                    weak_signal_threshold_dbm=args.weak_signal_threshold_dbm,
+                    weak_signal_threshold_dbm=args.weak_signal_threshold_db,
                 )
                 baseline = run_one("baseline", **common)
                 adaptive = run_one(
