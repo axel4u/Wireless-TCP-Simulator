@@ -3,6 +3,7 @@ import pytest
 from simulator.channel import WirelessChannel
 from simulator.event_scheduler import EventScheduler
 from simulator.receiver import Receiver
+from simulator.packet import Packet, PacketType
 from simulator.sender import Sender
 
 
@@ -81,3 +82,57 @@ def test_fast_retransmit_can_restart_oldest_packet_timer():
     assert sender._timer_id is not None
     assert sender._timer_id != original_timer_id
     assert original_timer_id in scheduler._cancelled
+
+
+
+def _enter_sender_fast_recovery(sender):
+    """Drive the sender through three duplicate cumulative ACKs."""
+    duplicate_ack = Packet(PacketType.ACK, 0, 40, sender.scheduler.now_ms)
+    sender._on_ack_delivery(duplicate_ack)
+    sender._on_ack_delivery(duplicate_ack)
+    sender._on_ack_delivery(duplicate_ack)
+    assert sender.congestion.state == "fast_recovery"
+
+
+def test_timeout_during_fast_recovery_resets_sender_recovery_state():
+    scheduler, _, _, sender = build_simulation(initial_cwnd=6, ssthresh=12)
+    sender.send_batch(6)
+    _enter_sender_fast_recovery(sender)
+
+    oldest = min(sender.outstanding)
+    sender._on_timeout(oldest)
+
+    assert sender.congestion.state == "slow_start"
+    assert sender.cwnd_packets == 1
+    assert sender.congestion.recover_sequence == -1
+    assert sender.timeout_count == 1
+
+
+def test_partial_ack_retransmits_next_missing_packet_and_stays_in_recovery():
+    scheduler, _, _, sender = build_simulation(initial_cwnd=6, ssthresh=12)
+    sender.send_batch(6)
+    _enter_sender_fast_recovery(sender)
+
+    # ACK 1 cumulatively acknowledges packet 0 but not the recovery boundary.
+    partial_ack = Packet(PacketType.ACK, 1, 40, scheduler.now_ms)
+    sender._on_ack_delivery(partial_ack)
+
+    assert sender.congestion.state == "fast_recovery"
+    assert 0 in sender.acked_sequences
+    assert min(sender.outstanding) == 1
+    assert sender.retransmission_count == 2  # fast retransmit + partial-ACK retransmit
+
+
+def test_full_ack_exits_sender_fast_recovery():
+    scheduler, _, _, sender = build_simulation(initial_cwnd=6, ssthresh=12)
+    sender.send_batch(6)
+    _enter_sender_fast_recovery(sender)
+
+    # ACK 6 advances beyond recover_sequence 5.
+    full_ack = Packet(PacketType.ACK, 6, 40, scheduler.now_ms)
+    sender._on_ack_delivery(full_ack)
+
+    assert sender.is_complete
+    assert sender.congestion.state == "congestion_avoidance"
+    assert sender.cwnd_packets == sender.ssthresh_packets
+    assert not sender.outstanding
