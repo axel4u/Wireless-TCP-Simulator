@@ -35,6 +35,8 @@ def run_one(
     signal_dbm: float = -95.0,
     wireless_queue_delay_ms: float = 5.0,
     congestion_queue_delay_ms: float = 80.0,
+    congestion_queue_threshold_ms: float = 40.0,
+    weak_signal_threshold_dbm: float = -80.0,
     loss_mode: str = "shared",
     channel_model: str = "independent",
     good_to_bad_probability: float = 0.02,
@@ -85,13 +87,17 @@ def run_one(
         queue_delay = wireless_queue_delay_ms
         policy = AdaptiveRecoveryPolicy(
             LinkMetrics(signal_strength_dbm=signal_dbm,
-                        queue_delay_ms=wireless_queue_delay_ms)
+                        queue_delay_ms=wireless_queue_delay_ms),
+            congestion_queue_threshold_ms=congestion_queue_threshold_ms,
+            weak_signal_threshold_dbm=weak_signal_threshold_dbm,
         )
     elif scenario == "adaptive_congestion":
         queue_delay = congestion_queue_delay_ms
         policy = AdaptiveRecoveryPolicy(
             LinkMetrics(signal_strength_dbm=signal_dbm,
-                        queue_delay_ms=congestion_queue_delay_ms)
+                        queue_delay_ms=congestion_queue_delay_ms),
+            congestion_queue_threshold_ms=congestion_queue_threshold_ms,
+            weak_signal_threshold_dbm=weak_signal_threshold_dbm,
         )
 
     sender = Sender(
@@ -127,6 +133,8 @@ def run_one(
         "bad_to_good_probability": bad_to_good_probability if channel_model == "burst" else "",
         "signal_dbm": signal_dbm if policy is not None else "",
         "queue_delay_ms": queue_delay,
+        "congestion_queue_threshold_ms": congestion_queue_threshold_ms if policy is not None else "",
+        "weak_signal_threshold_dbm": weak_signal_threshold_dbm if policy is not None else "",
         "packets_delivered": receiver.delivered_count,
         "unique_packets_acked": sender.unique_acked_count,
         "delivery_success": completed,
@@ -205,6 +213,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delay-ms", type=float, default=25.0)
     parser.add_argument("--rto-ms", type=float, default=100.0)
     parser.add_argument("--max-retransmissions", type=int, default=20)
+    parser.add_argument("--signal-db", type=float, default=-95.0,
+                        help="simulated signal strength for adaptive scenarios (dBm)")
+    parser.add_argument("--wireless-queue-delay-ms", type=float, default=5.0,
+                        help="queue delay for the adaptive wireless scenario")
+    parser.add_argument("--congestion-queue-delay-ms", type=float, default=80.0,
+                        help="queue delay for the congestion-fallback scenario")
+    parser.add_argument("--congestion-queue-threshold-ms", type=float, default=40.0,
+                        help="queue-delay threshold at which congestion takes priority")
+    parser.add_argument("--weak-signal-threshold-db", type=float, default=-80.0,
+                        help="signal threshold for wireless classification (dBm)")
     parser.add_argument("--loss-mode", choices=("shared", "random"), default="shared")
     parser.add_argument("--channel-model", choices=("independent", "burst"), default="independent")
     parser.add_argument("--good-to-bad", type=float, default=0.02)
@@ -224,6 +242,17 @@ def parse_args() -> argparse.Namespace:
         parser.error("--delay-ms must be >= 0 and --rto-ms must be > 0")
     if args.max_retransmissions < 0:
         parser.error("--max-retransmissions must be >= 0")
+    finite_options = (
+        "signal_db", "wireless_queue_delay_ms", "congestion_queue_delay_ms",
+        "congestion_queue_threshold_ms", "weak_signal_threshold_db",
+    )
+    for name in finite_options:
+        if not math.isfinite(getattr(args, name)):
+            parser.error(f"--{name.replace(chr(95), chr(45))} must be finite")
+    if args.wireless_queue_delay_ms < 0 or args.congestion_queue_delay_ms < 0:
+        parser.error("queue-delay options must be >= 0")
+    if args.congestion_queue_threshold_ms <= 0:
+        parser.error("--congestion-queue-threshold-ms must be > 0")
     if args.channel_model == "burst" and args.loss_mode == "shared":
         parser.error("burst channel cannot use packet-keyed shared loss; use --loss-mode random")
     for name in ("good_to_bad", "bad_to_good", "good_loss", "bad_loss"):
@@ -241,6 +270,11 @@ def main() -> None:
                 scenario=scenario, seed=seed, packets=args.packets,
                 loss=args.loss, delay_ms=args.delay_ms, rto_ms=args.rto_ms,
                 max_retransmissions=args.max_retransmissions,
+                signal_dbm=args.signal_db,
+                wireless_queue_delay_ms=args.wireless_queue_delay_ms,
+                congestion_queue_delay_ms=args.congestion_queue_delay_ms,
+                congestion_queue_threshold_ms=args.congestion_queue_threshold_ms,
+                weak_signal_threshold_dbm=args.weak_signal_threshold_db,
                 loss_mode=args.loss_mode, channel_model=args.channel_model,
                 good_to_bad_probability=args.good_to_bad,
                 bad_to_good_probability=args.bad_to_good,
