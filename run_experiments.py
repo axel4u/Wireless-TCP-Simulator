@@ -263,6 +263,7 @@ def main() -> None:
     else:
         paired_path.unlink(missing_ok=True)
         statistical_path.unlink(missing_ok=True)
+        independent_path.unlink(missing_ok=True)
         if args.burst_trace_mode == "shared-time":
             paired_rows, statistical_report = paired_analysis(rows)
             write_csv(paired_path, paired_rows)
@@ -295,12 +296,12 @@ def main() -> None:
                 print(f"  {metric}: {mean:.3f} ± {std:.3f}")
     print(f"\nDetailed results : {detailed_path}")
     print(f"Summary results  : {summary_path}")
-    if args.channel_model == "independent":
+    if args.channel_model == "independent" or (args.channel_model == "burst" and args.burst_trace_mode == "shared-time"):
         print(f"\nPaired comparisons: {paired_path}")
         print(f"Statistical report: {statistical_path}")
         print("\nPaired comparison (delta = comparison minus baseline):")
-    else:
-        print("\nPaired statistical analysis: skipped (burst streams are not paired).")
+    elif args.channel_model == "burst":
+        print("\nPaired statistical analysis: skipped (sequential burst streams are not paired).")
         print(f"Independent-sample Welch report: {independent_path}")
         print("Welch comparisons (successful independent runs):")
         for item in independent_report:
@@ -321,10 +322,13 @@ def main() -> None:
                 f"improved/equal/worsened={item['improved_seeds']}/"
                 f"{item['equal_seeds']}/{item['worsened_seeds']}"
             )
-    if args.channel_model == "burst":
-        print("\nNote: burst-loss runs use independent seeded sequential streams per scenario. "
-              "Compare scenario-level means, standard deviations, and success rates; "
-              "do not interpret seed-matched differences as paired statistical evidence.")
+    if args.channel_model == "burst" and args.burst_trace_mode == "shared-time":
+        print("\nNote: all scenarios for a seed share the same deterministic GOOD/BAD timeline "
+              "at virtual-time slots. Loss draws are keyed by time slot, direction, sequence "
+              "and attempt. Paired tests compare outcomes under this common environment; "
+              "individual packets need not align one-to-one.")
+    elif args.channel_model == "burst":
+        print("\nNote: sequential burst streams are independent across scenarios; use Welch results.")
     else:
         print("\nNote: packet-keyed shared loss aligns corresponding direction/sequence/attempt "
               "keys, not a fully time-aligned physical channel trace. Interpret results "
