@@ -51,7 +51,7 @@ def run_one(
     if channel_model not in ("independent", "burst"):
         raise ValueError("channel_model must be 'independent' or 'burst'")
     if channel_model == "burst" and loss_mode == "shared":
-        raise ValueError("burst channel requires --loss-mode random")
+        raise ValueError("burst channel cannot use packet-keyed shared loss; use --loss-mode random")
     if burst_trace_mode not in ("shared-time", "sequential"):
         raise ValueError("burst_trace_mode must be shared-time or sequential")
 
@@ -225,7 +225,7 @@ def parse_args() -> argparse.Namespace:
     if args.max_retransmissions < 0:
         parser.error("--max-retransmissions must be >= 0")
     if args.channel_model == "burst" and args.loss_mode == "shared":
-        parser.error("burst channel requires --loss-mode random")
+        parser.error("burst channel cannot use packet-keyed shared loss; use --loss-mode random")
     for name in ("good_to_bad", "bad_to_good", "good_loss", "bad_loss"):
         if not 0.0 <= getattr(args, name) <= 1.0:
             parser.error(f"--{name.replace(chr(95), chr(45))} must be between 0 and 1")
