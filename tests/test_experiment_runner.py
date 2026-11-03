@@ -86,3 +86,20 @@ def test_burst_channel_rejects_shared_packet_keyed_trace():
             "baseline", seed=1, packets=5, loss=0.10,
             loss_mode="shared", channel_model="burst",
         )
+
+
+
+def test_burst_runner_records_configured_and_observed_channel_statistics():
+    row = run_one(
+        "baseline", seed=31, packets=12, loss_mode="random",
+        channel_model="burst", good_to_bad_probability=0.10,
+        bad_to_good_probability=0.40, good_state_loss_probability=0.02,
+        bad_state_loss_probability=0.70,
+    )
+    assert row["good_to_bad_probability"] == 0.10
+    assert row["bad_to_good_probability"] == 0.40
+    assert row["good_state_loss_probability"] == 0.02
+    assert row["bad_state_loss_probability"] == 0.70
+    assert row["transmission_attempts"] > 0
+    assert 0.0 <= row["measured_loss_rate"] <= 1.0
+    assert row["good_state_attempts"] + row["bad_state_attempts"] == row["transmission_attempts"]
