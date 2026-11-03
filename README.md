@@ -94,15 +94,45 @@ tests/
 main.py
 ~~~
 
+## Multi-seed experimental evaluation
+
+The experiment runner executes the baseline, adaptive wireless, and adaptive congestion-fallback scenarios across a consecutive range of seeds. It uses shared packet-keyed loss by default and writes one detailed CSV row per scenario/seed plus a summary CSV.
+
+Run the recommended 30-seed evaluation from the repository root:
+
+~~~powershell
+python run_experiments.py
+~~~
+
+Useful options:
+
+~~~powershell
+python run_experiments.py --seeds 50 --start-seed 1 --packets 30 --loss 0.10
+python run_experiments.py --seeds 10 --start-seed 100 --loss-mode random
+python run_experiments.py --seeds 30 --output-dir results/low-loss --loss 0.05
+~~~
+
+Output files (created automatically):
+
+- `results/multi_seed_results.csv` — detailed result for every scenario and seed.
+- `results/multi_seed_summary.csv` — per-scenario delivery success rate, mean, and sample standard deviation.
+
+Metrics include delivered packets, unique ACKs, completion time, goodput, retransmissions, timeouts, drops, final cwnd/ssthresh, and recovery-decision counts. Goodput is calculated as successfully delivered application payload bits divided by elapsed simulation time. Means and standard deviations for performance metrics use successful runs; delivery success rate is reported separately. Failed runs remain visible in the detailed CSV with an error message.
+
+The default scenarios use -95 dBm with 5 ms queue delay for the wireless-aware case, and -95 dBm with 80 ms queue delay for congestion fallback. These are controlled simulated inputs, not live telemetry.
+
+**Interpretation:** the shared loss trace aligns corresponding direction/sequence/attempt keys; it is not a fully time-aligned physical channel trace. Treat the output as evidence within this simulator's assumptions, not as proof of real-network performance. Report the seed range, configuration, success rate, means, and variability.
+
 ## Planned milestones
 
 1. Packet and channel foundation — complete.
 2. Reliable delivery with RTO and cumulative ACKs — complete.
 3. TCP NewReno baseline — implemented.
 4. Wireless-aware timeout recovery — initial policy implemented.
-5. Shared-loss experiment foundation — implemented; repeated-seed statistics and additional metrics next.
-6. Streamlit + Plotly dashboard.
-7. Validation, documentation, and optional comparison with an established network simulator if required.
+5. Shared-loss experiment foundation — implemented.
+6. Multi-seed experimental evaluation and CSV reporting — implemented.
+7. Streamlit + Plotly dashboard.
+8. Validation, documentation, and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
 
