@@ -60,3 +60,29 @@ def test_summary_reports_success_rate_and_sample_statistics():
     assert baseline["std_completion_time_ms"] >= 0.0
     assert wireless["runs"] == 1
     assert wireless["std_completion_time_ms"] == 0.0
+
+
+def test_burst_channel_experiment_is_repeatable_and_completes():
+    first = run_one(
+        "baseline", seed=23, packets=10, loss=0.10,
+        loss_mode="random", channel_model="burst",
+    )
+    second = run_one(
+        "baseline", seed=23, packets=10, loss=0.10,
+        loss_mode="random", channel_model="burst",
+    )
+
+    assert first["channel_model"] == "burst"
+    assert first["delivery_success"] == second["delivery_success"]
+    assert first["packets_dropped"] == second["packets_dropped"]
+    assert first["completion_time_ms"] == second["completion_time_ms"]
+
+
+def test_burst_channel_rejects_shared_packet_keyed_trace():
+    import pytest
+
+    with pytest.raises(ValueError, match="cannot use packet-keyed shared loss"):
+        run_one(
+            "baseline", seed=1, packets=5, loss=0.10,
+            loss_mode="shared", channel_model="burst",
+        )
