@@ -4,14 +4,15 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 8 (interactive packet-flow visualizer)
+## Current status — Milestone 9 (burst-channel measurement and statistical evaluation)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
 - DATA and cumulative ACK packet model.
 - Wireless channel with configurable independent random packet loss, propagation delay, and an optional two-state Gilbert–Elliott burst-loss model.
 - Optional packet-keyed shared loss trace for repeatable cross-algorithm comparisons.
-- Multi-seed experiment runner with independent-loss paired comparisons and exploratory seed-matched burst-loss summaries.
+- Multi-seed experiment runner with paired statistics for independent packet-keyed loss and Welch independent-sample analysis for burst-loss experiments.
+- Configurable Gilbert–Elliott state transition/loss probabilities with measured loss rate and GOOD/BAD state occupancy recorded per run.
 - Receiver with out-of-order buffering and cumulative ACK generation.
 - Sliding-window sender with a single retransmission timer for the oldest unacknowledged packet.
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
@@ -75,9 +76,9 @@ python main.py --packets 30 --loss 0.10 --seed 7
 
 ## Wireless channel models (Milestone 9)
 
-The independent-loss model samples each transmission attempt separately. The optional Gilbert–Elliott model switches between GOOD and BAD channel states: each state has its own packet-loss probability, and transition probabilities control how long the channel tends to remain in each state. This creates temporally correlated losses and makes consecutive packet drops possible. The model is a simplified statistical channel abstraction, not a measured RF/fading model. Its initial state is GOOD and it is seeded for repeatability.
+The independent-loss model samples each transmission attempt separately. The optional Gilbert–Elliott model switches between GOOD and BAD channel states: each state has its own packet-loss probability, and transition probabilities control how long the channel tends to remain in each state. This creates temporally correlated losses and makes consecutive packet drops possible. The model records the number of attempts in each state, total drops, and measured loss rate. Its initial state is GOOD. It is a simplified statistical channel abstraction, not a measured RF/fading model.
 
-The dashboard lets you select independent random loss or burst loss. The multi-seed runner also supports `--channel-model burst --loss-mode random`. Burst-mode runs use seeded sequential random streams; because the algorithms can make different numbers of transmission attempts, outcomes are not strictly paired packet-by-packet. The runner still writes seed-matched exploratory deltas, but its paired-test p-values must not be treated as confirmatory evidence for burst mode. Prefer scenario means, standard deviations, and success rates, and state this limitation in reports.
+The dashboard lets you select independent random loss or burst loss. For burst mode, it exposes the four Gilbert–Elliott probabilities and reports measured loss rate plus GOOD/BAD state occupancy. The multi-seed runner supports `--channel-model burst --loss-mode random` and accepts `--good-to-bad`, `--bad-to-good`, `--good-loss`, and `--bad-loss`. Burst-mode scenarios use independent seeded sequential streams, so the runner skips paired analysis and writes `independent_sample_report.csv` with Welch two-sample comparisons. These comparisons assume independent seed-level runs and use successful runs only; report success rates separately.
 
 ## Adaptive policy assumptions
 
@@ -123,7 +124,7 @@ Useful options:
 python run_experiments.py --seeds 50 --start-seed 1 --packets 30 --loss 0.10
 python run_experiments.py --seeds 10 --start-seed 100 --loss-mode random
 python run_experiments.py --seeds 30 --output-dir results/low-loss --loss 0.05
-python run_experiments.py --seeds 30 --channel-model burst --loss-mode random --output-dir results/burst-loss
+python run_experiments.py --seeds 100 --channel-model burst --loss-mode random --good-to-bad 0.02 --bad-to-good 0.25 --good-loss 0.01 --bad-loss 0.80 --output-dir results/burst-loss
 ~~~
 
 Output files (created automatically):
@@ -131,7 +132,8 @@ Output files (created automatically):
 - `results/multi_seed_results.csv` — detailed result for every scenario and seed.
 - `results/multi_seed_summary.csv` — per-scenario delivery success rate, mean, and sample standard deviation.
 - `results/paired_seed_comparisons.csv` — baseline and comparison metrics plus per-seed deltas.
-- `results/paired_statistical_report.csv` — paired mean/median deltas, 95% confidence intervals, paired t-test p-values, and exact two-sided sign-test p-values.
+- `results/paired_statistical_report.csv` — paired mean/median deltas, 95% confidence intervals, paired t-test p-values, and exact two-sided sign-test p-values (independent-loss mode only).
+- `results/independent_sample_report.csv` — Welch independent-sample mean differences, 95% confidence intervals, and two-sided p-values (burst mode only).
 
 Metrics include delivered packets, unique ACKs, completion time, goodput, retransmissions, timeouts, drops, final cwnd/ssthresh, and recovery-decision counts. Goodput is calculated as successfully delivered application payload bits divided by elapsed simulation time. Means and standard deviations for performance metrics use successful runs; delivery success rate is reported separately. Failed runs remain visible in the detailed CSV with an error message.
 
@@ -189,3 +191,10 @@ The dashboard's signal-strength and queue-delay values are simulated inputs, not
 ## License
 
 This repository currently has no license file.
+
+
+## Burst-channel measurement and statistics
+
+For burst runs, the CSV records the four configured Gilbert–Elliott probabilities, total transmission attempts, measured loss rate, GOOD/BAD state attempt counts, and state occupancy percentages. The dashboard exposes the same four parameters and reports observed channel statistics. The nominal `--loss` argument applies only to independent-loss mode and is not used by Gilbert–Elliott mode.
+
+Because each algorithm's behavior can consume a different number of sequential random draws, burst-mode runs are not paired by seed. The runner therefore omits paired CSVs and writes an independent-sample Welch report. This report compares successful runs from independent scenario groups; delivery success rates remain a separate outcome. Welch inference assumes independent seed-level observations and should be treated as model-specific evidence, not real-network validation.
