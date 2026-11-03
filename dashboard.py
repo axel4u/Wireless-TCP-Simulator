@@ -5,7 +5,6 @@ import math
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
@@ -153,7 +152,7 @@ with st.sidebar:
         "These are controlled simulator inputs, not measurements from your "
         "computer's Wi-Fi adapter."
     )
-    run_button = st.button("Run simulation comparison", type="primary", use_container_width=True)
+    run_button = st.button("Run simulation comparison", type="primary", width="stretch")
 
 st.info(
     "The comparison runs all three scenarios with the same seed and shared "
@@ -265,7 +264,7 @@ else:
     st.dataframe(
         summary,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     left, right = st.columns(2)
@@ -277,7 +276,7 @@ else:
             color="Scenario",
             title="Completion time (lower is better)",
         )
-        st.plotly_chart(figure, use_container_width=True)
+        st.plotly_chart(figure, width="stretch")
     with right:
         figure = px.bar(
             summary,
@@ -286,7 +285,7 @@ else:
             color="Scenario",
             title="Goodput (higher is better)",
         )
-        st.plotly_chart(figure, use_container_width=True)
+        st.plotly_chart(figure, width="stretch")
 
     st.subheader("Congestion-window behaviour")
     selected_label = st.selectbox("Choose a scenario trace", list(SCENARIOS))
@@ -296,7 +295,7 @@ else:
             selected_result["window_history"],
             f"{selected_label}: congestion window over simulation time",
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader("Adaptive recovery decisions")
@@ -312,7 +311,7 @@ else:
                 }
             )
     if decision_rows:
-        st.dataframe(pd.DataFrame(decision_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(decision_rows), hide_index=True, width="stretch")
     else:
         st.write("No adaptive timeout decisions occurred in these runs.")
 
