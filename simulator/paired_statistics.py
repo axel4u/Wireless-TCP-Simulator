@@ -62,12 +62,12 @@ def _regularized_beta(x: float, a: float, b: float) -> float:
     return 1.0 - front * _beta_continued_fraction(b, a, 1.0 - x) / b
 
 
-def _t_two_sided_p_value(t_value: float, degrees_freedom: int) -> float:
+def _t_two_sided_p_value(t_value: float, degrees_freedom: float) -> float:
     x = degrees_freedom / (degrees_freedom + t_value * t_value)
     return min(1.0, _regularized_beta(x, degrees_freedom / 2.0, 0.5))
 
 
-def _t_critical_975(degrees_freedom: int) -> float:
+def _t_critical_975(degrees_freedom: float) -> float:
     low, high = 0.0, 1.0
     while _t_two_sided_p_value(high, degrees_freedom) > 0.05:
         high *= 2.0
