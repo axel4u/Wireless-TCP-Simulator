@@ -486,7 +486,10 @@ def experiment_setup_dialog():
             st.slider("BAD → GOOD transition", 0.0, 1.0, 0.25, 0.01, key="cfg_bad_to_good")
     st.divider()
     if st.button("Run simulation comparison", type="primary", width="stretch"):
+        # Persist the request, then trigger a full-app rerun. This closes the
+        # dialog and lets the main page start rendering the comparison results.
         st.session_state["run_comparison_requested"] = True
+        st.rerun()
 
 if st.button("Experiment setup  ·  Configure and run", type="primary"):
     experiment_setup_dialog()
