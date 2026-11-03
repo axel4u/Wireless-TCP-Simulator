@@ -9,7 +9,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
 - DATA and cumulative ACK packet model.
-- Wireless channel with configurable independent random packet loss and propagation delay.
+- Wireless channel with configurable independent random packet loss, propagation delay, and an optional two-state Gilbert–Elliott burst-loss model.
 - Optional packet-keyed shared loss trace for repeatable cross-algorithm comparisons.
 - Multi-seed experiment runner with per-seed paired comparisons, confidence intervals, paired t-tests, and exact sign tests.
 - Receiver with out-of-order buffering and cumulative ACK generation.
@@ -72,6 +72,12 @@ The default `--loss-mode random` retains the original sequential random-number g
 ~~~powershell
 python main.py --packets 30 --loss 0.10 --seed 7
 ~~~
+
+## Wireless channel models (Milestone 9)
+
+The independent-loss model samples each transmission attempt separately. The optional Gilbert–Elliott model switches between GOOD and BAD channel states: each state has its own packet-loss probability, and transition probabilities control how long the channel tends to remain in each state. This creates temporally correlated losses and makes consecutive packet drops possible. The model is a simplified statistical channel abstraction, not a measured RF/fading model. Its initial state is GOOD and it is seeded for repeatability.
+
+The dashboard lets you select independent random loss or burst loss. For burst mode, runs use a seeded sequential random stream; because the algorithms can make different numbers of transmission attempts, outcomes are not strictly paired packet-by-packet. Use repeated seeds and report this limitation when comparing algorithms.
 
 ## Adaptive policy assumptions
 
@@ -167,7 +173,8 @@ The dashboard's signal-strength and queue-delay values are simulated inputs, not
 6.1 Paired per-seed statistical evaluation — implemented.
 7. Streamlit + Plotly dashboard — implemented.
 8. Interactive packet-level flow visualization — initial version implemented.
-9. Validation, documentation, and optional comparison with an established network simulator if required.
+9. Gilbert–Elliott burst-loss channel model — initial implementation added.
+10. Validation, parameter sweeps, documentation, and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
 
