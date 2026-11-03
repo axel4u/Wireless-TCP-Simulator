@@ -44,6 +44,7 @@ class WirelessChannel:
         self.dropped_count = 0
         self.delivered_count = 0
         self.events: list[str] = []
+        self.transmission_records: list[dict[str, object]] = []
 
     def transmit(self, packet: Packet, on_delivery: Callable[[Packet], None]) -> None:
         self.sent_count += 1
@@ -52,18 +53,30 @@ class WirelessChannel:
         key = (packet_type, packet.sequence_number)
         self._attempts[key] += 1
 
+        channel_state = None
         if self.shared_burst_trace is not None:
+            channel_state = self.shared_burst_trace.state_at(self.scheduler.now_ms)
             dropped = self.shared_burst_trace.should_drop(
                 self.scheduler.now_ms, packet_type, packet.sequence_number, self._attempts[key]
             )
         elif self.burst_loss_model is not None:
             dropped = self.burst_loss_model.should_drop()
+            channel_state = self.burst_loss_model.state
         elif self.loss_trace is None:
             dropped = self._rng.random() < self.loss_probability
         else:
             dropped = self.loss_trace.should_drop(
                 packet_type, packet.sequence_number, self._attempts[key]
             )
+
+        self.transmission_records.append({
+            "time_ms": self.scheduler.now_ms,
+            "packet_type": direction,
+            "sequence_number": packet.sequence_number,
+            "attempt_number": self._attempts[key],
+            "channel_state": channel_state,
+            "dropped": dropped,
+        })
 
         if dropped:
             self.dropped_count += 1
