@@ -35,9 +35,9 @@ def independent_sample_analysis(
                 df = se2 * se2 / (v1 * v1 / (n1 - 1) + v2 * v2 / (n2 - 1)) if se2 else n1 + n2 - 2
                 se = math.sqrt(se2)
                 t_value = delta / se if se else (0.0 if delta == 0 else math.copysign(math.inf, delta))
-                critical = _t_critical_975(max(1, int(df)))
+                critical = _t_critical_975(max(1.0, df))
                 low, high = delta - critical * se, delta + critical * se
-                p_value = _t_two_sided_p_value(abs(t_value), max(1, int(df)))
+                p_value = _t_two_sided_p_value(abs(t_value), max(1.0, df))
             else:
                 df = se = t_value = low = high = p_value = math.nan
             report.append({
