@@ -233,3 +233,24 @@ python run_experiments.py --seeds 30 --channel-model burst --loss-mode random --
 ~~~
 
 The tests cover the exact congestion threshold, a value immediately below it, weak-signal-plus-high-queue priority, sender congestion-window reduction on the congestion fallback, and rejection of non-finite measurements or thresholds. A passing test suite verifies implementation behavior; it does not by itself prove that the simulated thresholds are suitable for real Wi-Fi. Threshold calibration and validation against measured telemetry remain future work.
+
+
+## Parameter sensitivity sweep (Milestone 12)
+
+Run the 3 x 3 signal-strength / queue-delay grid:
+
+~~~powershell
+python run_sensitivity.py --seeds 30 --signals=-79,-80,-81 --queue-delays=39,40,41 --congestion-queue-threshold-ms 40 --weak-signal-threshold-db -80 --output-dir results/sensitivity
+~~~
+
+The sweep runs a NewReno baseline and adaptive scenario for each grid point and seed, using the same shared time-indexed Gilbert–Elliott channel trace for each pair. It writes:
+- `sensitivity_detailed.csv`: individual baseline/adaptive runs and observed transmission records.
+- `sensitivity_summary.csv`: success rate, means, and standard deviations for each grid point and scenario.
+- `sensitivity_paired_report.csv`: paired deltas, 95% confidence intervals, paired t-test and sign-test results per grid point.
+
+Expected decision boundaries with thresholds -80 dBm and 40 ms:
+- queue delay below 40 ms and signal at or below -80 dBm: WIRELESS;
+- queue delay below 40 ms and signal above -80 dBm: UNCERTAIN;
+- queue delay at or above 40 ms: CONGESTION regardless of signal.
+
+This is a sensitivity study of simulated inputs, not calibration against measured Wi-Fi telemetry. The baseline is rerun at each grid point so each comparison uses the same seed and channel timeline.
