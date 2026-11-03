@@ -12,6 +12,7 @@ from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
 from simulator.channel import WirelessChannel
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
+from simulator.paired_statistics import paired_analysis
 from simulator.receiver import Receiver
 from simulator.sender import Sender
 
@@ -190,8 +191,13 @@ def main() -> None:
     summaries = summarize(rows)
     detailed_path = args.output_dir / "multi_seed_results.csv"
     summary_path = args.output_dir / "multi_seed_summary.csv"
+    paired_rows, statistical_report = paired_analysis(rows)
+    paired_path = args.output_dir / "paired_seed_comparisons.csv"
+    statistical_path = args.output_dir / "paired_statistical_report.csv"
     write_csv(detailed_path, rows)
     write_csv(summary_path, summaries)
+    write_csv(paired_path, paired_rows)
+    write_csv(statistical_path, statistical_report)
 
     print("\n=== Multi-seed Wireless TCP Experiment ===")
     print(f"Seeds                 : {args.start_seed}..{args.start_seed + args.seeds - 1}")
@@ -212,6 +218,19 @@ def main() -> None:
                 print(f"  {metric}: {mean:.3f} ± {std:.3f}")
     print(f"\nDetailed results : {detailed_path}")
     print(f"Summary results  : {summary_path}")
+    print(f"\\nPaired comparisons: {paired_path}")
+    print(f"Statistical report: {statistical_path}")
+    print("\\nPaired comparison (delta = comparison minus baseline):")
+    for item in statistical_report:
+        if item["metric"] in ("completion_time_ms", "goodput_mbps", "timeouts"):
+            print(
+                f"  {item['comparison']} / {item['metric']}: "
+                f"mean delta={item['mean_delta_comparison_minus_baseline']:.3f}, "
+                f"95% CI=[{item['ci95_low_delta']:.3f}, {item['ci95_high_delta']:.3f}], "
+                f"paired t p={item['paired_t_p_value_two_sided']:.6g}, "
+                f"improved/equal/worsened={item['improved_seeds']}/"
+                f"{item['equal_seeds']}/{item['worsened_seeds']}"
+            )
     print("\nNote: packet-keyed shared loss aligns corresponding direction/sequence/attempt "
           "keys, not a fully time-aligned physical channel trace. Interpret results "
           "within the simulator's stated assumptions.")
