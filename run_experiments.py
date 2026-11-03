@@ -218,9 +218,9 @@ def main() -> None:
                 print(f"  {metric}: {mean:.3f} ± {std:.3f}")
     print(f"\nDetailed results : {detailed_path}")
     print(f"Summary results  : {summary_path}")
-    print(f"\\nPaired comparisons: {paired_path}")
+    print(f"\nPaired comparisons: {paired_path}")
     print(f"Statistical report: {statistical_path}")
-    print("\\nPaired comparison (delta = comparison minus baseline):")
+    print("\nPaired comparison (delta = comparison minus baseline):")
     for item in statistical_report:
         if item["metric"] in ("completion_time_ms", "goodput_mbps", "timeouts"):
             print(
