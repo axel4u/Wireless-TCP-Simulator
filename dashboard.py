@@ -301,17 +301,25 @@ st.markdown(
     [data-baseweb="select"]>div,[data-baseweb="input"]>div { background:#111b26; border-color:#304253; border-radius:8px; }
     hr { border-color:var(--line)!important; }
     .dashboard-kicker {
-        display:inline-block;
+        display:block;
+        width:max-content;
+        max-width:100%;
+        box-sizing:border-box;
         color:#75e0d0 !important;
-        font-size:.78rem;
-        font-weight:750;
-        letter-spacing:.16em;
-        line-height:1.5;
+        font-size:.76rem;
+        font-weight:700;
+        letter-spacing:.12em;
+        line-height:2;
         text-transform:uppercase;
+        white-space:normal;
+        overflow:visible;
         opacity:1 !important;
-        margin:0 0 .7rem 0;
-        text-shadow:0 0 1px rgba(117,224,208,.25);
+        padding:3px 2px 7px;
+        margin:0 0 .55rem 0;
+        text-shadow:none;
     }
+    [data-testid="stMarkdown"] { overflow:visible !important; }
+    [data-testid="stMarkdown"] p { margin-top:0; margin-bottom:0; }
     .dashboard-subtitle { color:var(--muted); font-size:1rem; max-width:850px; line-height:1.6; margin-top:-.3rem; }
     </style>
     """,
