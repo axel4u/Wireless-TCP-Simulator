@@ -39,6 +39,8 @@ class GilbertElliottLoss:
         self.state = self.GOOD
         self._rng = random.Random(seed)
         self.state_history: list[str] = []
+        self.drop_count = 0
+        self.attempt_count = 0
 
     def should_drop(self) -> bool:
         """Advance the channel state and return this attempt's loss outcome."""
@@ -50,9 +52,25 @@ class GilbertElliottLoss:
             self.state = self.GOOD
 
         self.state_history.append(self.state)
+        self.attempt_count += 1
         loss_probability = (
             self.good_state_loss_probability
             if self.state == self.GOOD
             else self.bad_state_loss_probability
         )
-        return self._rng.random() < loss_probability
+        dropped = self._rng.random() < loss_probability
+        if dropped:
+            self.drop_count += 1
+        return dropped
+
+    @property
+    def good_state_attempts(self) -> int:
+        return self.state_history.count(self.GOOD)
+
+    @property
+    def bad_state_attempts(self) -> int:
+        return self.state_history.count(self.BAD)
+
+    @property
+    def measured_loss_rate(self) -> float:
+        return self.drop_count / self.attempt_count if self.attempt_count else 0.0
