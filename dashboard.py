@@ -12,6 +12,7 @@ import streamlit as st
 
 from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
 from simulator.burst_loss import GilbertElliottLoss
+from simulator.shared_burst_trace import SharedBurstLossTrace
 from simulator.channel import WirelessChannel
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
@@ -42,6 +43,7 @@ def run_simulation(
     bad_to_good_probability: float = 0.25,
     good_state_loss_probability: float = 0.01,
     bad_state_loss_probability: float = 0.80,
+    burst_trace_mode: str = "shared-time",
 ) -> dict:
     """Run one simulation and return metrics plus time-series data."""
     scheduler = EventScheduler()
@@ -52,7 +54,15 @@ def run_simulation(
         good_state_loss_probability=good_state_loss_probability,
         bad_state_loss_probability=bad_state_loss_probability,
         seed=seed,
-    ) if channel_model == "burst" else None
+    ) if channel_model == "burst" and burst_trace_mode == "sequential" else None
+    shared_burst_trace = SharedBurstLossTrace(
+        good_to_bad_probability=good_to_bad_probability,
+        bad_to_good_probability=bad_to_good_probability,
+        good_state_loss_probability=good_state_loss_probability,
+        bad_state_loss_probability=bad_state_loss_probability,
+        seed=seed,
+    ) if channel_model == "burst" and burst_trace_mode == "shared-time" else None
+    burst_stats = shared_burst_trace or burst_model
     channel = WirelessChannel(
         scheduler,
         loss_probability=loss,
@@ -60,6 +70,7 @@ def run_simulation(
         seed=seed,
         loss_trace=trace,
         burst_loss_model=burst_model,
+        shared_burst_trace=shared_burst_trace,
     )
     receiver = Receiver(channel)
 
@@ -107,8 +118,8 @@ def run_simulation(
         "packets_dropped": channel.dropped_count,
         "transmission_attempts": channel.sent_count,
         "measured_loss_rate_pct": 100.0 * channel.dropped_count / channel.sent_count if channel.sent_count else 0.0,
-        "good_state_occupancy_pct": 100.0 * burst_model.good_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else None,
-        "bad_state_occupancy_pct": 100.0 * burst_model.bad_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else None,
+        "good_state_occupancy_pct": 100.0 * burst_stats.good_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else None,
+        "bad_state_occupancy_pct": 100.0 * burst_stats.bad_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else None,
         "final_cwnd_packets": sender.cwnd_packets,
         "final_ssthresh_packets": sender.ssthresh_packets,
         "wireless_recoveries": sender.wireless_recovery_count,
@@ -277,12 +288,18 @@ with st.sidebar:
         disabled=channel_model == "burst",
     )
     if channel_model == "burst":
+        burst_trace_mode = st.selectbox(
+            "Burst trace mode",
+            options=["shared-time", "sequential"],
+            format_func=lambda value: "Shared time-indexed trace (recommended)" if value == "shared-time" else "Sequential per-run stream",
+        )
         st.subheader("Gilbert–Elliott parameters")
         good_loss = st.slider("GOOD-state loss", 0.0, 1.0, 0.01, 0.01)
         bad_loss = st.slider("BAD-state loss", 0.0, 1.0, 0.80, 0.01)
         good_to_bad = st.slider("GOOD → BAD transition", 0.0, 1.0, 0.02, 0.01)
         bad_to_good = st.slider("BAD → GOOD transition", 0.0, 1.0, 0.25, 0.01)
     else:
+        burst_trace_mode = "shared-time"
         good_loss, bad_loss, good_to_bad, bad_to_good = 0.01, 0.80, 0.02, 0.25
     delay_ms = st.slider(
         "One-way propagation delay (ms)", 0.0, 200.0, 25.0, 5.0
@@ -308,8 +325,8 @@ with st.sidebar:
 st.info(
     "Independent mode uses shared packet-keyed loss outcomes for comparison. "
     "Burst mode uses a seeded Gilbert–Elliott channel with the configurable "
-    "GOOD/BAD loss and transition probabilities above. Its runs are not "
-    "packet-keyed across different sender behaviours."
+    "GOOD/BAD loss and transition probabilities above. Shared-time mode uses "
+    "the same deterministic state timeline at each virtual-time slot for all scenarios."
 )
 
 if run_button:
@@ -335,6 +352,7 @@ if run_button:
                 bad_to_good_probability=bad_to_good,
                 good_state_loss_probability=good_loss,
                 bad_state_loss_probability=bad_loss,
+                burst_trace_mode=burst_trace_mode,
             )
         st.session_state["wireless_tcp_results"] = results
         st.session_state["wireless_tcp_config"] = {
@@ -350,6 +368,7 @@ if run_button:
             "bad_loss": bad_loss,
             "good_to_bad": good_to_bad,
             "bad_to_good": bad_to_good,
+            "burst_trace_mode": burst_trace_mode,
         }
 
 results = st.session_state.get("wireless_tcp_results")
