@@ -300,6 +300,82 @@ st.markdown(
     .stButton>button:hover { background:#2a9d90; border-color:#55c7b6; color:white; }
     [data-baseweb="select"]>div,[data-baseweb="input"]>div { background:#111b26; border-color:#304253; border-radius:8px; }
     hr { border-color:var(--line)!important; }
+    .network-visual {
+        position:relative; margin:1.3rem 0 1.5rem; padding:24px 28px 20px;
+        border:1px solid #263b4a; border-radius:14px;
+        background:linear-gradient(115deg,#101b27 0%,#132638 52%,#101b27 100%);
+        overflow:hidden;
+    }
+    .network-visual:before {
+        content:""; position:absolute; inset:0;
+        background:radial-gradient(ellipse at 50% 50%,rgba(67,183,165,.09),transparent 62%);
+        pointer-events:none;
+    }
+    .network-visual-head {
+        position:relative; display:flex; justify-content:space-between;
+        gap:12px; align-items:center; margin-bottom:22px;
+        color:#a9bac8; font-size:.72rem; letter-spacing:.12em;
+        text-transform:uppercase; font-weight:650;
+    }
+    .network-live { color:#70d9c7; letter-spacing:.08em; }
+    .network-flow {
+        position:relative; display:grid; grid-template-columns:1fr 1.25fr 1fr;
+        align-items:center; gap:16px; min-height:112px;
+    }
+    .network-node {
+        z-index:2; text-align:center; padding:16px 10px;
+        border:1px solid #385064; border-radius:10px;
+        background:rgba(9,17,25,.82); color:#edf3f7;
+        box-shadow:0 8px 24px rgba(0,0,0,.16);
+    }
+    .network-node strong { display:block; font-size:.92rem; font-weight:650; }
+    .network-node span { display:block; margin-top:5px; color:#91a5b5; font-size:.72rem; }
+    .network-channel {
+        z-index:1; position:relative; height:74px;
+        border-top:1px solid #365267; border-bottom:1px solid #365267;
+        background:repeating-linear-gradient(90deg,transparent 0 13px,rgba(98,139,163,.08) 13px 14px);
+    }
+    .network-channel:before,.network-channel:after {
+        content:""; position:absolute; left:0; right:0; height:1px;
+        background:rgba(86,135,158,.55);
+    }
+    .network-channel:before { top:23px; }
+    .network-channel:after { top:49px; }
+    .packet-dot {
+        position:absolute; z-index:3; width:8px; height:8px; border-radius:50%;
+        top:19px; left:0; background:#55d2bd;
+        box-shadow:0 0 12px rgba(85,210,189,.85);
+        animation:packet-forward 3.2s linear infinite;
+    }
+    .packet-dot.p2 { top:45px; animation-delay:1.05s; }
+    .packet-dot.p3 { top:19px; animation-delay:2.1s; background:#8eb7ff; box-shadow:0 0 12px rgba(142,183,255,.8); }
+    .ack-dot {
+        position:absolute; z-index:3; width:6px; height:6px; border-radius:50%;
+        right:0; top:57px; background:#e4b17b;
+        box-shadow:0 0 10px rgba(228,177,123,.8);
+        animation:packet-return 3.2s linear infinite;
+    }
+    @keyframes packet-forward { from {left:0%;opacity:0} 8% {opacity:1} 92% {opacity:1} to {left:96%;opacity:0} }
+    @keyframes packet-return { from {right:0%;opacity:0} 8% {opacity:1} 92% {opacity:1} to {right:96%;opacity:0} }
+    .network-legend {
+        position:relative; display:flex; justify-content:center; flex-wrap:wrap;
+        gap:22px; margin-top:17px; color:#9aabba; font-size:.72rem;
+    }
+    .network-legend span { display:inline-flex; align-items:center; gap:7px; }
+    .legend-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+    @media (max-width:700px) {
+        .network-visual { padding:18px 14px; }
+        .network-flow { grid-template-columns:1fr; gap:10px; }
+        .network-channel { height:48px; }
+        .network-channel:before { top:14px; }
+        .network-channel:after { top:34px; }
+        .packet-dot { top:10px; }
+        .packet-dot.p2 { top:30px; }
+        .packet-dot.p3 { top:10px; }
+        .ack-dot { top:39px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .packet-dot,.ack-dot { animation:none; } }
+
     .dashboard-kicker {
         display:block;
         width:max-content;
@@ -334,6 +410,37 @@ st.markdown(
     '<div class="dashboard-subtitle">Evaluate a NewReno-style baseline against '
     'a rule-based wireless-aware timeout recovery policy under controlled '
     'packet-loss and channel conditions.</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <section class="network-visual" aria-label="Animated TCP packet flow illustration">
+      <div class="network-visual-head">
+        <span>Transmission overview</span>
+        <span class="network-live">SIMULATED PACKET FLOW</span>
+      </div>
+      <div class="network-flow">
+        <div class="network-node">
+          <strong>TCP sender</strong>
+          <span>DATA segments</span>
+        </div>
+        <div class="network-channel">
+          <i class="packet-dot"></i><i class="packet-dot p2"></i>
+          <i class="packet-dot p3"></i><i class="ack-dot"></i>
+        </div>
+        <div class="network-node">
+          <strong>TCP receiver</strong>
+          <span>Cumulative ACKs</span>
+        </div>
+      </div>
+      <div class="network-legend">
+        <span><i class="legend-dot" style="background:#55d2bd"></i>DATA transmission</span>
+        <span><i class="legend-dot" style="background:#e4b17b"></i>ACK return path</span>
+        <span><i class="legend-dot" style="background:#8eb7ff"></i>Additional segment</span>
+      </div>
+    </section>
+    """,
     unsafe_allow_html=True,
 )
 
