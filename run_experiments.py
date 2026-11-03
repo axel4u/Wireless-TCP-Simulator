@@ -94,7 +94,11 @@ def run_one(
         "loss_mode": loss_mode,
         "channel_model": channel_model,
         "packets_configured": packets,
-        "loss_probability": loss,
+        "loss_probability": loss if channel_model == "independent" else "",
+        "good_state_loss_probability": 0.01 if channel_model == "burst" else "",
+        "bad_state_loss_probability": 0.80 if channel_model == "burst" else "",
+        "good_to_bad_probability": 0.02 if channel_model == "burst" else "",
+        "bad_to_good_probability": 0.25 if channel_model == "burst" else "",
         "signal_dbm": signal_dbm if policy is not None else "",
         "queue_delay_ms": queue_delay,
         "packets_delivered": receiver.delivered_count,
@@ -202,19 +206,27 @@ def main() -> None:
     summaries = summarize(rows)
     detailed_path = args.output_dir / "multi_seed_results.csv"
     summary_path = args.output_dir / "multi_seed_summary.csv"
-    paired_rows, statistical_report = paired_analysis(rows)
-    paired_path = args.output_dir / "paired_seed_comparisons.csv"
-    statistical_path = args.output_dir / "paired_statistical_report.csv"
     write_csv(detailed_path, rows)
     write_csv(summary_path, summaries)
-    write_csv(paired_path, paired_rows)
-    write_csv(statistical_path, statistical_report)
+    paired_path = args.output_dir / "paired_seed_comparisons.csv"
+    statistical_path = args.output_dir / "paired_statistical_report.csv"
+    statistical_report = []
+    if args.channel_model == "independent":
+        paired_rows, statistical_report = paired_analysis(rows)
+        write_csv(paired_path, paired_rows)
+        write_csv(statistical_path, statistical_report)
+    else:
+        paired_path.unlink(missing_ok=True)
+        statistical_path.unlink(missing_ok=True)
 
     print("\n=== Multi-seed Wireless TCP Experiment ===")
     print(f"Seeds                 : {args.start_seed}..{args.start_seed + args.seeds - 1}")
     print(f"Runs                  : {len(rows)} ({args.seeds} seeds x {len(SCENARIOS)} scenarios)")
     print(f"Packets per run       : {args.packets}")
-    print(f"Loss probability      : {args.loss:.1%}")
+    if args.channel_model == "independent":
+        print(f"Loss probability      : {args.loss:.1%}")
+    else:
+        print("Gilbert-Elliott rates : GOOD loss 1%, BAD loss 80%; GOOD->BAD 2%, BAD->GOOD 25%")
     print(f"Loss mode             : {args.loss_mode}")
     print(f"Channel model         : {args.channel_model}")
     print("\nScenario summary (mean ± sample standard deviation; successful runs):")
@@ -230,9 +242,12 @@ def main() -> None:
                 print(f"  {metric}: {mean:.3f} ± {std:.3f}")
     print(f"\nDetailed results : {detailed_path}")
     print(f"Summary results  : {summary_path}")
-    print(f"\nPaired comparisons: {paired_path}")
-    print(f"Statistical report: {statistical_path}")
-    print("\nPaired comparison (delta = comparison minus baseline):")
+    if args.channel_model == "independent":
+        print(f"\nPaired comparisons: {paired_path}")
+        print(f"Statistical report: {statistical_path}")
+        print("\nPaired comparison (delta = comparison minus baseline):")
+    else:
+        print("\nPaired statistical analysis: skipped (burst streams are not paired).")
     for item in statistical_report:
         if item["metric"] in ("completion_time_ms", "goodput_mbps", "timeouts"):
             print(
@@ -245,8 +260,8 @@ def main() -> None:
             )
     if args.channel_model == "burst":
         print("\nNote: burst-loss runs use independent seeded sequential streams per scenario. "
-              "Seed-matched differences are exploratory, not strictly paired; do not "
-              "interpret paired-test p-values as confirmatory evidence.")
+              "Compare scenario-level means, standard deviations, and success rates; "
+              "do not interpret seed-matched differences as paired statistical evidence.")
     else:
         print("\nNote: packet-keyed shared loss aligns corresponding direction/sequence/attempt "
               "keys, not a fully time-aligned physical channel trace. Interpret results "
