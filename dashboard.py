@@ -178,6 +178,22 @@ def make_packet_animation(events: list[str]):
         )],
         frames=frames,
     )
+    figure.add_annotation(
+        x=2, y=0.48, ax=0, ay=0.48,
+        xref="x", yref="y", axref="x", ayref="y",
+        text="DATA direction", showarrow=True, arrowhead=3,
+        arrowsize=1.2, arrowwidth=2.5, arrowcolor="#4DA3FF",
+        font={"color": "#4DA3FF", "size": 13},
+        yshift=4,
+    )
+    figure.add_annotation(
+        x=0, y=-0.48, ax=2, ay=-0.48,
+        xref="x", yref="y", axref="x", ayref="y",
+        text="ACK direction", showarrow=True, arrowhead=3,
+        arrowsize=1.2, arrowwidth=2.5, arrowcolor="#FFB86B",
+        font={"color": "#FFB86B", "size": 13},
+        yshift=-4,
+    )
     figure.update_layout(
         title=f"Packet journey · {len(parsed)} channel events",
         xaxis={
@@ -186,8 +202,8 @@ def make_packet_animation(events: list[str]):
             "ticktext": ["Sender", "Wireless channel", "Receiver"],
             "fixedrange": True,
         },
-        yaxis={"range": [-1, 1], "visible": False, "fixedrange": True},
-        height=340,
+        yaxis={"range": [-0.85, 0.85], "visible": False, "fixedrange": True},
+        height=390,
         showlegend=False,
         updatemenus=[{
             "type": "buttons", "showactive": False, "x": 0.05, "y": -0.18,
