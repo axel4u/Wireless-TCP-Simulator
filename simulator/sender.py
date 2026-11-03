@@ -7,6 +7,7 @@ from simulator.channel import WirelessChannel
 from simulator.congestion_control import CongestionController
 from simulator.event_scheduler import EventScheduler
 from simulator.packet import Packet, PacketType
+from simulator.adaptive_policy import AdaptiveRecoveryPolicy
 from simulator.receiver import Receiver
 
 
@@ -26,6 +27,7 @@ class Sender:
         max_retransmissions: int = 20,
         initial_cwnd_packets: float = 1.0,
         initial_ssthresh_packets: float = 8.0,
+        adaptive_policy: AdaptiveRecoveryPolicy | None = None,
     ) -> None:
         if retransmission_timeout_ms <= 0:
             raise ValueError("retransmission_timeout_ms must be > 0")
@@ -36,6 +38,10 @@ class Sender:
         self.scheduler = scheduler
         self.retransmission_timeout_ms = retransmission_timeout_ms
         self.max_retransmissions = max_retransmissions
+        self.adaptive_policy = adaptive_policy
+        self.adaptive_decisions: list[tuple[float, str, str]] = []
+        self.wireless_recovery_count = 0
+        self.congestion_recovery_count = 0
         self.congestion = CongestionController(
             initial_cwnd_packets, initial_ssthresh_packets
         )
@@ -178,7 +184,20 @@ class Sender:
             self._arm_timer()
             return
         self.timeout_count += 1
-        self.congestion.on_timeout(len(self.outstanding))
+        decision = (
+            self.adaptive_policy.classify()
+            if self.adaptive_policy is not None
+            else AdaptiveRecoveryPolicy.UNCERTAIN
+        )
+        if self.adaptive_policy is not None:
+            self.adaptive_decisions.append((self.scheduler.now_ms, decision, "timeout"))
+        if decision == AdaptiveRecoveryPolicy.WIRELESS:
+            # Likely wireless impairment: retransmit without shrinking cwnd.
+            self.wireless_recovery_count += 1
+        else:
+            # Congestion or uncertain evidence keeps the conservative fallback.
+            self.congestion_recovery_count += 1
+            self.congestion.on_timeout(len(self.outstanding))
         self._record_window()
         self._retransmit(sequence_number)
         self._arm_timer()
