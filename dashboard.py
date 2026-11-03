@@ -11,6 +11,7 @@ import plotly.express as px
 import streamlit as st
 
 from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
+from simulator.burst_loss import GilbertElliottLoss
 from simulator.channel import WirelessChannel
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
@@ -36,16 +37,19 @@ def run_simulation(
     signal_dbm: float,
     queue_delay_ms: float,
     loss_mode: str = "shared",
+    channel_model: str = "independent",
 ) -> dict:
     """Run one simulation and return metrics plus time-series data."""
     scheduler = EventScheduler()
     trace = SharedLossTrace(loss, seed=seed) if loss_mode == "shared" else None
+    burst_model = GilbertElliottLoss(seed=seed) if channel_model == "burst" else None
     channel = WirelessChannel(
         scheduler,
         loss_probability=loss,
         delay_ms=delay_ms,
         seed=seed,
         loss_trace=trace,
+        burst_loss_model=burst_model,
     )
     receiver = Receiver(channel)
 
@@ -248,6 +252,11 @@ st.caption(
 with st.sidebar:
     st.header("Simulation configuration")
     packets = st.slider("DATA packets", min_value=5, max_value=100, value=30, step=5)
+    channel_model = st.selectbox(
+        "Wireless channel model",
+        options=["independent", "burst"],
+        format_func=lambda value: "Independent random loss" if value == "independent" else "Burst loss (Gilbert–Elliott)",
+    )
     loss = st.slider(
         "Packet loss probability", min_value=0.0, max_value=0.50,
         value=0.10, step=0.01, format="%.2f",
@@ -274,9 +283,9 @@ with st.sidebar:
     run_button = st.button("Run simulation comparison", type="primary", width="stretch")
 
 st.info(
-    "The comparison runs all three scenarios with the same seed and shared "
-    "packet-keyed loss mode. This aligns corresponding direction/sequence/attempt "
-    "keys, not a fully time-aligned physical channel trace."
+    "Independent mode uses shared packet-keyed loss outcomes for comparison. "
+    "Burst mode uses a seeded Gilbert–Elliott two-state channel; it is stochastic "
+    "and not packet-keyed across different sender behaviours."
 )
 
 if run_button:
@@ -296,6 +305,8 @@ if run_button:
                 seed=int(seed),
                 signal_dbm=float(signal_dbm),
                 queue_delay_ms=float(effective_queue),
+                loss_mode="random" if channel_model == "burst" else "shared",
+                channel_model=channel_model,
             )
         st.session_state["wireless_tcp_results"] = results
         st.session_state["wireless_tcp_config"] = {
@@ -306,6 +317,7 @@ if run_button:
             "seed": int(seed),
             "signal_dbm": signal_dbm,
             "queue_delay_ms": queue_delay_ms,
+            "channel_model": channel_model,
         }
 
 results = st.session_state.get("wireless_tcp_results")
@@ -337,7 +349,8 @@ else:
     st.subheader("Simulation results")
     st.caption(
         f"{config['packets']} packets · {config['loss']:.0%} loss · "
-        f"{config['delay_ms']:.0f} ms one-way delay · seed {config['seed']}"
+        f"{config['delay_ms']:.0f} ms one-way delay · "
+        f"{config['channel_model']} channel · seed {config['seed']}"
     )
 
     summary_rows = []
