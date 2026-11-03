@@ -300,7 +300,18 @@ st.markdown(
     .stButton>button:hover { background:#2a9d90; border-color:#55c7b6; color:white; }
     [data-baseweb="select"]>div,[data-baseweb="input"]>div { background:#111b26; border-color:#304253; border-radius:8px; }
     hr { border-color:var(--line)!important; }
-    .dashboard-kicker { color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.45rem; }
+    .dashboard-kicker {
+        display:inline-block;
+        color:#75e0d0 !important;
+        font-size:.78rem;
+        font-weight:750;
+        letter-spacing:.16em;
+        line-height:1.5;
+        text-transform:uppercase;
+        opacity:1 !important;
+        margin:0 0 .7rem 0;
+        text-shadow:0 0 1px rgba(117,224,208,.25);
+    }
     .dashboard-subtitle { color:var(--muted); font-size:1rem; max-width:850px; line-height:1.6; margin-top:-.3rem; }
     </style>
     """,
