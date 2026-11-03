@@ -132,7 +132,7 @@ with st.sidebar:
     packets = st.slider("DATA packets", min_value=5, max_value=100, value=30, step=5)
     loss = st.slider(
         "Packet loss probability", min_value=0.0, max_value=0.50,
-        value=0.10, step=0.01, format="%.0f%%",
+        value=0.10, step=0.01, format="%.2f",
     )
     delay_ms = st.slider(
         "One-way propagation delay (ms)", 0.0, 200.0, 25.0, 5.0
@@ -251,7 +251,6 @@ else:
         if adaptive["delivery_success"] else "Failed",
         f"{baseline['completion_time_ms'] - adaptive['completion_time_ms']:.1f} ms vs baseline"
         if adaptive["delivery_success"] and baseline["delivery_success"] else None,
-        delta_color="inverse",
     )
     col2.metric(
         "Adaptive goodput",
