@@ -366,12 +366,17 @@ with st.sidebar:
     )
     run_button = st.button("Run comparison", type="primary", width="stretch")
 
-st.info(
-    "Independent mode uses shared packet-keyed loss outcomes for comparison. "
-    "Burst mode uses a seeded Gilbert–Elliott channel with the configurable "
-    "GOOD/BAD loss and transition probabilities above. Shared-time mode uses "
-    "the same deterministic state timeline at each virtual-time slot for all scenarios."
-)
+with st.expander("Channel model and comparison method", expanded=False):
+    st.markdown(
+        """
+        - **Independent loss:** scenarios use shared packet-keyed loss outcomes.
+        - **Burst loss:** a seeded Gilbert–Elliott model controls GOOD/BAD channel states.
+        - **Shared-time trace:** scenarios use the same deterministic channel-state
+          timeline at each virtual-time slot.
+
+        These are simulated channel conditions, not live measurements from a Wi-Fi adapter.
+        """
+    )
 
 if run_button:
     with st.spinner("Running three simulations..."):
@@ -467,10 +472,6 @@ else:
                 "Retransmissions": result["retransmissions"],
                 "Timeouts": result["timeouts"],
                 "Dropped": result["packets_dropped"],
-                "Measured loss (%)": result["measured_loss_rate_pct"],
-                "GOOD-state transmission share (%)": result["good_state_occupancy_pct"],
-                "BAD-state transmission share (%)": result["bad_state_occupancy_pct"],
-                "Final cwnd": result["final_cwnd_packets"],
             }
         )
     summary = pd.DataFrame(summary_rows)
@@ -499,7 +500,30 @@ else:
         summary,
         hide_index=True,
         width="stretch",
+        column_config={
+            "Scenario": st.column_config.TextColumn("Scenario", width="large"),
+            "Delivery": st.column_config.TextColumn("Delivered", width="small"),
+            "Completion (ms)": st.column_config.NumberColumn("Completion", format="%.1f ms"),
+            "Goodput (Mbps)": st.column_config.NumberColumn("Goodput", format="%.3f Mbps"),
+            "Retransmissions": st.column_config.NumberColumn("Retrans.", format="%d"),
+            "Timeouts": st.column_config.NumberColumn("Timeouts", format="%d"),
+            "Dropped": st.column_config.NumberColumn("Dropped", format="%d"),
+        },
     )
+    with st.expander("Additional channel and congestion metrics"):
+        detail_rows = []
+        for label, result in results.items():
+            detail_rows.append({
+                "Scenario": label,
+                "Measured loss (%)": result["measured_loss_rate_pct"],
+                "GOOD-state share (%)": result["good_state_occupancy_pct"],
+                "BAD-state share (%)": result["bad_state_occupancy_pct"],
+                "Final cwnd (packets)": result["final_cwnd_packets"],
+                "Final ssthresh (packets)": result["final_ssthresh_packets"],
+                "Wireless recoveries": result["wireless_recoveries"],
+                "Congestion recoveries": result["congestion_recoveries"],
+            })
+        st.dataframe(pd.DataFrame(detail_rows), hide_index=True, width="stretch")
 
     left, right = st.columns(2)
     with left:
