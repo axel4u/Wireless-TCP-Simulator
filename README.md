@@ -1,21 +1,21 @@
 # Wireless TCP Simulator
 
-A Python-based educational simulator for studying TCP behavior over unreliable wireless links. The project will compare a simplified TCP NewReno-style baseline with a conservative wireless-aware recovery policy.
+A Python discrete-event simulator for studying TCP behavior over unreliable wireless links. The project will compare a simplified TCP NewReno-style baseline with a conservative wireless-aware recovery policy.
 
 > **Research boundary:** This is a discrete-event simulation, not a modified operating-system TCP stack or a standardized TCP implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 1
+## Current status — Milestone 2
 
 Implemented:
-- Deterministic discrete-event scheduler (virtual time; stable event ordering).
+- Deterministic discrete-event scheduler with cancellable events.
 - DATA and ACK packet model.
-- Wireless channel with configurable independent packet loss and propagation delay.
+- Wireless channel with configurable independent random packet loss and propagation delay.
 - Receiver with out-of-order buffering and cumulative ACKs.
-- Fixed-batch sender and event log.
-- Unit tests.
+- Reliable stop-and-wait sender with retransmission timeout (RTO), retry limit, and cumulative ACK processing.
+- Event log and automated tests.
 
 Not implemented yet:
-- Retransmission timeout (RTO), retransmissions, congestion window, NewReno, wireless-aware classification, experiments, or dashboard.
+- TCP congestion window, NewReno, fast retransmit/recovery, wireless-aware loss classification, experiment runner, or dashboard.
 
 ## Requirements
 
@@ -34,18 +34,26 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Using the virtual-environment Python executable directly avoids PowerShell activation-policy issues.
+Use the virtual-environment Python executable directly if PowerShell activation is restricted.
 
-## Run
+## Run experiments
+
+Default run:
 
 ```powershell
-python main.py
+.\.venv\Scripts\python.exe main.py
 ```
 
-Optional arguments:
+Higher loss:
 
 ```powershell
-python main.py --packets 20 --loss 0.10 --delay-ms 25 --seed 7
+.\.venv\Scripts\python.exe main.py --packets 10 --loss 0.35 --delay-ms 25 --rto-ms 100 --seed 7
+```
+
+A run with total loss is expected to stop with a clear failure after the configured retry limit:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --loss 1.0 --max-retransmissions 2
 ```
 
 ## Project layout
@@ -63,8 +71,8 @@ main.py
 
 ## Planned milestones
 
-1. **Packet and channel foundation** — current.
-2. Reliable delivery — retransmission timers, timeout handling, duplicate ACK tracking.
+1. Packet and channel foundation.
+2. **Reliable delivery — current:** RTO-based retransmission and cumulative ACK handling.
 3. TCP baseline — congestion window, slow start, congestion avoidance, fast retransmit/recovery.
 4. Wireless-aware recovery — use explicit observable link signals; fall back to standard congestion response when evidence is uncertain or congestion is indicated.
 5. Experiment runner — controlled scenarios, fixed seeds, metrics, repeated trials.
@@ -78,6 +86,10 @@ main.py
 - Treat congestion as real and preserve a conservative fallback.
 - Report goodput, delay/RTT, retransmissions, recovery time, and fairness as appropriate.
 - Document assumptions and limitations alongside every result.
+
+## Current model limitation
+
+The reliability sender uses a one-packet stop-and-wait window to isolate retransmission correctness. It is not yet TCP NewReno and does not model a congestion window. The RTO is fixed for now; adaptive RTT estimation will be considered in a later milestone.
 
 ## License
 
