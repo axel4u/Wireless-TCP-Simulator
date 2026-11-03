@@ -34,6 +34,10 @@ def run_one(
     congestion_queue_delay_ms: float = 80.0,
     loss_mode: str = "shared",
     channel_model: str = "independent",
+    good_to_bad_probability: float = 0.02,
+    bad_to_good_probability: float = 0.25,
+    good_state_loss_probability: float = 0.01,
+    bad_state_loss_probability: float = 0.80,
 ) -> dict[str, Any]:
     """Run one scenario/seed and return a flat, CSV-friendly result row."""
     if scenario not in SCENARIOS:
@@ -47,7 +51,13 @@ def run_one(
 
     scheduler = EventScheduler()
     trace = SharedLossTrace(loss, seed=seed) if loss_mode == "shared" else None
-    burst_model = GilbertElliottLoss(seed=seed) if channel_model == "burst" else None
+    burst_model = GilbertElliottLoss(
+        good_to_bad_probability=good_to_bad_probability,
+        bad_to_good_probability=bad_to_good_probability,
+        good_state_loss_probability=good_state_loss_probability,
+        bad_state_loss_probability=bad_state_loss_probability,
+        seed=seed,
+    ) if channel_model == "burst" else None
     channel = WirelessChannel(
         scheduler, loss_probability=loss, delay_ms=delay_ms,
         seed=seed, loss_trace=trace, burst_loss_model=burst_model,
@@ -95,10 +105,10 @@ def run_one(
         "channel_model": channel_model,
         "packets_configured": packets,
         "loss_probability": loss if channel_model == "independent" else "",
-        "good_state_loss_probability": 0.01 if channel_model == "burst" else "",
-        "bad_state_loss_probability": 0.80 if channel_model == "burst" else "",
-        "good_to_bad_probability": 0.02 if channel_model == "burst" else "",
-        "bad_to_good_probability": 0.25 if channel_model == "burst" else "",
+        "good_state_loss_probability": good_state_loss_probability if channel_model == "burst" else "",
+        "bad_state_loss_probability": bad_state_loss_probability if channel_model == "burst" else "",
+        "good_to_bad_probability": good_to_bad_probability if channel_model == "burst" else "",
+        "bad_to_good_probability": bad_to_good_probability if channel_model == "burst" else "",
         "signal_dbm": signal_dbm if policy is not None else "",
         "queue_delay_ms": queue_delay,
         "packets_delivered": receiver.delivered_count,
@@ -109,6 +119,12 @@ def run_one(
         "retransmissions": sender.retransmission_count,
         "timeouts": sender.timeout_count,
         "packets_dropped": channel.dropped_count,
+        "transmission_attempts": channel.sent_count,
+        "measured_loss_rate": channel.dropped_count / channel.sent_count if channel.sent_count else 0.0,
+        "good_state_attempts": burst_model.good_state_attempts if burst_model else "",
+        "bad_state_attempts": burst_model.bad_state_attempts if burst_model else "",
+        "good_state_occupancy_pct": 100.0 * burst_model.good_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else "",
+        "bad_state_occupancy_pct": 100.0 * burst_model.bad_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else "",
         "final_cwnd_packets": sender.cwnd_packets,
         "final_ssthresh_packets": sender.ssthresh_packets,
         "wireless_recoveries": sender.wireless_recovery_count,
@@ -174,6 +190,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-retransmissions", type=int, default=20)
     parser.add_argument("--loss-mode", choices=("shared", "random"), default="shared")
     parser.add_argument("--channel-model", choices=("independent", "burst"), default="independent")
+    parser.add_argument("--good-to-bad", type=float, default=0.02)
+    parser.add_argument("--bad-to-good", type=float, default=0.25)
+    parser.add_argument("--good-loss", type=float, default=0.01)
+    parser.add_argument("--bad-loss", type=float, default=0.80)
     parser.add_argument("--output-dir", type=Path, default=Path("results"))
     args = parser.parse_args()
     if args.seeds < 1 or args.packets < 1:
@@ -188,6 +208,9 @@ def parse_args() -> argparse.Namespace:
         parser.error("--max-retransmissions must be >= 0")
     if args.channel_model == "burst" and args.loss_mode == "shared":
         parser.error("burst channel requires --loss-mode random")
+    for name in ("good_to_bad", "bad_to_good", "good_loss", "bad_loss"):
+        if not 0.0 <= getattr(args, name) <= 1.0:
+            parser.error(f"--{name.replace(chr(95), chr(45))} must be between 0 and 1")
     return args
 
 
@@ -201,6 +224,10 @@ def main() -> None:
                 loss=args.loss, delay_ms=args.delay_ms, rto_ms=args.rto_ms,
                 max_retransmissions=args.max_retransmissions,
                 loss_mode=args.loss_mode, channel_model=args.channel_model,
+                good_to_bad_probability=args.good_to_bad,
+                bad_to_good_probability=args.bad_to_good,
+                good_state_loss_probability=args.good_loss,
+                bad_state_loss_probability=args.bad_loss,
             ))
 
     summaries = summarize(rows)
@@ -226,7 +253,7 @@ def main() -> None:
     if args.channel_model == "independent":
         print(f"Loss probability      : {args.loss:.1%}")
     else:
-        print("Gilbert-Elliott rates : GOOD loss 1%, BAD loss 80%; GOOD->BAD 2%, BAD->GOOD 25%")
+        print(f"Gilbert-Elliott rates : GOOD loss {args.good_loss:.1%}, BAD loss {args.bad_loss:.1%}; GOOD->BAD {args.good_to_bad:.1%}, BAD->GOOD {args.bad_to_good:.1%}")
     print(f"Loss mode             : {args.loss_mode}")
     print(f"Channel model         : {args.channel_model}")
     print("\nScenario summary (mean ± sample standard deviation; successful runs):")
