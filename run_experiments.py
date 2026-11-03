@@ -77,7 +77,7 @@ def run_one(
     completed = sender.is_complete and not sender.failed
     completion_ms = scheduler.now_ms if completed else math.nan
     goodput_mbps = (
-        receiver.delivered_count * 1000 * 8 / (completion_ms * 1000) / 1_000_000
+        receiver.delivered_count * 1000 * 8 / (completion_ms * 1000)
         if completed and completion_ms > 0 else math.nan
     )
     return {
