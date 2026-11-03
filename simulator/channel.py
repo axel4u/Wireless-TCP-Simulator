@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
+from simulator.burst_loss import GilbertElliottLoss
 from simulator.packet import Packet, PacketType
 
 
@@ -18,11 +19,14 @@ class WirelessChannel:
         delay_ms: float = 25.0,
         seed: int = 7,
         loss_trace: SharedLossTrace | None = None,
+        burst_loss_model: GilbertElliottLoss | None = None,
     ) -> None:
         if not 0.0 <= loss_probability <= 1.0:
             raise ValueError("loss_probability must be between 0 and 1")
         if delay_ms < 0:
             raise ValueError("delay_ms cannot be negative")
+        if loss_trace is not None and burst_loss_model is not None:
+            raise ValueError("choose either loss_trace or burst_loss_model, not both")
         if loss_trace is not None and loss_trace.loss_probability != loss_probability:
             raise ValueError("loss_trace probability must match loss_probability")
         self.scheduler = scheduler
@@ -30,6 +34,7 @@ class WirelessChannel:
         self.delay_ms = delay_ms
         self._rng = random.Random(seed)
         self.loss_trace = loss_trace
+        self.burst_loss_model = burst_loss_model
         self._attempts: defaultdict[tuple[PacketType, int], int] = defaultdict(int)
         self.sent_count = 0
         self.dropped_count = 0
@@ -43,7 +48,9 @@ class WirelessChannel:
         key = (packet_type, packet.sequence_number)
         self._attempts[key] += 1
 
-        if self.loss_trace is None:
+        if self.burst_loss_model is not None:
+            dropped = self.burst_loss_model.should_drop()
+        elif self.loss_trace is None:
             dropped = self._rng.random() < self.loss_probability
         else:
             dropped = self.loss_trace.should_drop(
