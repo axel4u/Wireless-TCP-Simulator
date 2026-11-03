@@ -20,8 +20,8 @@ def build_adaptive_simulation(loss, signal_db, queue_delay_ms, seed=7):
     return scheduler, sender
 
 
-def observe_first_timeout(scheduler, sender):
-    sender.send_batch(1)
+def observe_first_timeout(scheduler, sender, packet_count=1):
+    sender.send_batch(packet_count)
     try:
         scheduler.run(max_events=1)
     except RuntimeError:
@@ -53,3 +53,17 @@ def test_uncertain_evidence_uses_standard_timeout_fallback():
     assert sender.congestion_recovery_count == 1
     assert sender.cwnd_packets == 1
     assert sender.adaptive_decisions[0][1] == AdaptiveRecoveryPolicy.UNCERTAIN
+
+
+
+def test_weak_signal_never_overrides_congestion_evidence_at_sender():
+    scheduler, sender = build_adaptive_simulation(1.0, -110, 40)
+    original_cwnd = sender.cwnd_packets
+    observe_first_timeout(scheduler, sender, packet_count=4)
+
+    assert sender.adaptive_decisions[0][1] == AdaptiveRecoveryPolicy.CONGESTION
+    assert sender.congestion_recovery_count == 1
+    assert sender.wireless_recovery_count == 0
+    assert sender.cwnd_packets == 1
+    assert sender.ssthresh_packets == 2
+    assert sender.cwnd_packets < original_cwnd
