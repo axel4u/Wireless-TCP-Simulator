@@ -67,3 +67,17 @@ def test_sender_enters_fast_recovery_after_three_duplicate_acks():
     assert sender.is_complete
     assert receiver.delivered_count == 6
     assert any(state == "fast_recovery" for _, _, state in sender.window_history)
+
+
+
+def test_fast_retransmit_can_restart_oldest_packet_timer():
+    scheduler, _, _, sender = build_simulation()
+    sender.send_batch(1)
+    original_timer_id = sender._timer_id
+    assert original_timer_id is not None
+
+    sender._arm_timer(force_restart=True)
+
+    assert sender._timer_id is not None
+    assert sender._timer_id != original_timer_id
+    assert original_timer_id in scheduler._cancelled
