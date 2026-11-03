@@ -127,6 +127,7 @@ def run_simulation(
         "window_history": sender.window_history,
         "adaptive_decisions": sender.adaptive_decisions,
         "channel_events": channel.events,
+        "channel_transmission_records": channel.transmission_records,
         "error": error,
     }
 
@@ -424,8 +425,8 @@ else:
                 "Timeouts": result["timeouts"],
                 "Dropped": result["packets_dropped"],
                 "Measured loss (%)": result["measured_loss_rate_pct"],
-                "GOOD occupancy (%)": result["good_state_occupancy_pct"],
-                "BAD occupancy (%)": result["bad_state_occupancy_pct"],
+                "GOOD-state transmission share (%)": result["good_state_occupancy_pct"],
+                "BAD-state transmission share (%)": result["bad_state_occupancy_pct"],
                 "Final cwnd": result["final_cwnd_packets"],
             }
         )
@@ -477,6 +478,13 @@ else:
         )
         st.plotly_chart(figure, width="stretch")
 
+
+    st.subheader("Wireless channel trace")
+    st.caption("Each row records virtual time, packet direction, sequence, attempt, channel state and loss decision.")
+    trace_label = st.selectbox("Choose channel trace", list(SCENARIOS), key="channel_trace_scenario")
+    trace_records = results[trace_label]["channel_transmission_records"]
+    if trace_records:
+        st.dataframe(pd.DataFrame(trace_records), hide_index=True, width="stretch")
 
     st.subheader("Interactive packet transmission")
     st.caption(
