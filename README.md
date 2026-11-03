@@ -4,7 +4,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 10 (shared time-indexed burst-channel experiments)
+## Current status — Milestone 11 (robustness and congestion-safety validation)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -18,7 +18,9 @@ Implemented:
 - Receiver with out-of-order buffering and cumulative ACK generation.
 - Sliding-window sender with a single retransmission timer for the oldest unacknowledged packet.
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
-- Initial rule-based adaptive timeout recovery using observable/simulated signal strength and queueing-delay inputs.
+- Rule-based adaptive timeout recovery using observable/simulated signal strength and queueing-delay inputs, with explicit priority for congestion evidence.
+- Finite-value validation for signal, queue-delay, and policy-threshold inputs; boundary tests at and immediately below the congestion threshold.
+- Configurable signal-strength and queue-delay values plus policy thresholds in the multi-seed experiment runner.
 - Congestion-window history, event log, and automated tests.
 - Interactive Streamlit + Plotly dashboard for scenario comparison, metrics, congestion-window history, and recovery decisions.
 - Step-by-step packet-flow animation built from the simulator's recorded DATA/ACK channel events, including visible packet drops and reverse-direction ACK delivery.
@@ -139,7 +141,7 @@ Output files (created automatically):
 
 Metrics include delivered packets, unique ACKs, completion time, goodput, retransmissions, timeouts, drops, final cwnd/ssthresh, and recovery-decision counts. Goodput is calculated as successfully delivered application payload bits divided by elapsed simulation time. Means and standard deviations for performance metrics use successful runs; delivery success rate is reported separately. Failed runs remain visible in the detailed CSV with an error message.
 
-The default scenarios use -95 dBm with 5 ms queue delay for the wireless-aware case, and -95 dBm with 80 ms queue delay for congestion fallback. These are controlled simulated inputs, not live telemetry. Each detailed burst result row includes a serialized `channel_transmission_records` field with the time, packet type, sequence, attempt, state, and drop decision for every transmission.
+The default scenarios use -95 dBm with 5 ms queue delay for the wireless-aware case, and -95 dBm with 80 ms queue delay for congestion fallback. These are controlled simulated inputs, not live telemetry. Milestone 11 exposes `--signal-db`, `--wireless-queue-delay-ms`, `--congestion-queue-delay-ms`, `--congestion-queue-threshold-ms`, and `--weak-signal-threshold-db` so the policy can be stress-tested at boundary and alternate operating points. Each detailed burst result row includes a serialized `channel_transmission_records` field with the time, packet type, sequence, attempt, state, and drop decision for every transmission.
 
 ### Paired statistical analysis
 
@@ -179,8 +181,9 @@ The dashboard's signal-strength and queue-delay values are simulated inputs, not
 7. Streamlit + Plotly dashboard — implemented.
 8. Interactive packet-level flow visualization — initial version implemented.
 9. Gilbert–Elliott burst-loss channel model — initial implementation added.
-10. Shared time-indexed burst trace and paired experiment evaluation — initial implementation added.
-10. Validation, parameter sweeps, documentation, and optional comparison with an established network simulator if required.
+10. Shared time-indexed burst trace and paired experiment evaluation — implemented.
+11. Robustness and congestion-safety validation — implementation added; awaiting local test and experiment verification.
+12. Parameter sweeps, final documentation, and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
 
@@ -214,3 +217,19 @@ python run_experiments.py --seeds 100 --channel-model burst --loss-mode random -
 For a given seed, each scenario constructs the same deterministic channel-state timeline indexed by 1 ms virtual-time slots. The channel state is therefore a function of simulation time, not the number of transmissions made by a scenario. A loss draw is then deterministic for the tuple (seed, time slot, direction, sequence number, attempt number), using the loss probability of the state at that time. This gives paired runs a common time-indexed wireless environment while allowing their packet schedules and retransmission decisions to differ naturally.
 
 The detailed CSV includes `channel_transmission_records`, a serialized list recording each transmission's virtual time, packet direction, sequence, attempt, GOOD/BAD state, and drop result. State-share metrics describe the states sampled at transmission attempts, not total wall-clock occupancy. The shared-time trace is still a statistical abstraction, not a physical RF channel or a fully synchronized packet-by-packet replay. Paired inference is across independent seeds under common per-seed channel timelines; report the assumptions and confidence intervals with results.
+
+
+## Robustness and congestion-safety validation (Milestone 11)
+
+The policy applies a conservative decision order:
+1. If queue delay is at or above the configured congestion threshold, classify the loss as likely congestion, even when signal strength is very weak.
+2. Only when queue delay is below the threshold can weak signal classify the condition as likely wireless.
+3. Otherwise classify the evidence as uncertain and use the standard timeout fallback.
+
+The experiment runner exposes these simulated inputs and thresholds. Example boundary-oriented configuration:
+
+~~~powershell
+python run_experiments.py --seeds 30 --channel-model burst --loss-mode random --burst-trace-mode shared-time --signal-db -95 --wireless-queue-delay-ms 39 --congestion-queue-delay-ms 40 --congestion-queue-threshold-ms 40 --weak-signal-threshold-db -80 --output-dir results/robustness-boundary
+~~~
+
+The tests cover the exact congestion threshold, a value immediately below it, weak-signal-plus-high-queue priority, sender congestion-window reduction on the congestion fallback, and rejection of non-finite measurements or thresholds. A passing test suite verifies implementation behavior; it does not by itself prove that the simulated thresholds are suitable for real Wi-Fi. Threshold calibration and validation against measured telemetry remain future work.
