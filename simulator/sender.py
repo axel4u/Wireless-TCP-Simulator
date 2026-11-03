@@ -1,13 +1,10 @@
-"""Reliable stop-and-wait sender with cumulative ACKs and retransmission timers.
-
-This milestone models reliability only. Congestion control and a TCP congestion
-window are intentionally deferred to the next milestone.
-"""
+"""TCP sender with a sliding window and a simplified TCP NewReno baseline."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from simulator.channel import WirelessChannel
+from simulator.congestion_control import CongestionController
 from simulator.event_scheduler import EventScheduler
 from simulator.packet import Packet, PacketType
 from simulator.receiver import Receiver
@@ -17,7 +14,6 @@ from simulator.receiver import Receiver
 class _OutstandingPacket:
     packet: Packet
     transmissions: int = 1
-    timer_id: int | None = None
 
 
 class Sender:
@@ -28,6 +24,8 @@ class Sender:
         scheduler: EventScheduler,
         retransmission_timeout_ms: float = 100.0,
         max_retransmissions: int = 20,
+        initial_cwnd_packets: float = 1.0,
+        initial_ssthresh_packets: float = 8.0,
     ) -> None:
         if retransmission_timeout_ms <= 0:
             raise ValueError("retransmission_timeout_ms must be > 0")
@@ -38,12 +36,23 @@ class Sender:
         self.scheduler = scheduler
         self.retransmission_timeout_ms = retransmission_timeout_ms
         self.max_retransmissions = max_retransmissions
+        self.congestion = CongestionController(
+            initial_cwnd_packets, initial_ssthresh_packets
+        )
         self.acked_sequences: set[int] = set()
         self.outstanding: dict[int, _OutstandingPacket] = {}
         self.retransmission_count = 0
         self.timeout_count = 0
         self.failed = False
         self._packet_count = 0
+        self._packet_size_bytes = 1000
+        self._next_sequence = 0
+        self._last_ack = 0
+        self._timer_id: int | None = None
+        self._timer_sequence: int | None = None
+        self.window_history: list[tuple[float, float, str]] = [
+            (scheduler.now_ms, self.congestion.cwnd_packets, self.congestion.state)
+        ]
 
     def send_batch(self, packet_count: int, packet_size_bytes: int = 1000) -> None:
         if packet_count < 1:
@@ -53,72 +62,120 @@ class Sender:
         if self._packet_count or self.outstanding:
             raise RuntimeError("Sender instances support one batch per simulation")
         self._packet_count = packet_count
+        self._packet_size_bytes = packet_size_bytes
+        self._fill_window()
 
-        # This milestone deliberately uses a one-packet window: it isolates
-        # reliable delivery before congestion/window behavior is introduced.
-        self._send_new_packet(0, packet_size_bytes)
+    def _record_window(self) -> None:
+        snapshot = (self.scheduler.now_ms, self.congestion.cwnd_packets,
+                    self.congestion.state)
+        if not self.window_history or self.window_history[-1][1:] != snapshot[1:]:
+            self.window_history.append(snapshot)
 
-    def _send_new_packet(self, sequence_number: int, size_bytes: int) -> None:
-        packet = Packet(PacketType.DATA, sequence_number, size_bytes,
-                        self.scheduler.now_ms)
-        state = _OutstandingPacket(packet=packet)
-        self.outstanding[sequence_number] = state
-        self._transmit_state(sequence_number, state)
-
-    def _transmit_state(self, sequence_number: int, state: _OutstandingPacket) -> None:
-        self.channel.transmit(state.packet, self._on_data_delivery)
-        if state.timer_id is not None:
-            self.scheduler.cancel(state.timer_id)
-        state.timer_id = self.scheduler.schedule(
-            self.retransmission_timeout_ms,
-            lambda seq=sequence_number, expected=state: self._on_timeout(seq, expected),
-        )
+    def _fill_window(self) -> None:
+        while (
+            self._next_sequence < self._packet_count
+            and len(self.outstanding) < max(1, int(self.congestion.cwnd_packets))
+        ):
+            seq = self._next_sequence
+            self._next_sequence += 1
+            packet = Packet(PacketType.DATA, seq, self._packet_size_bytes,
+                            self.scheduler.now_ms)
+            self.outstanding[seq] = _OutstandingPacket(packet)
+            self.channel.transmit(packet, self._on_data_delivery)
+        self._arm_timer()
 
     def _on_data_delivery(self, packet: Packet) -> None:
         self.receiver.receive(packet, self._on_ack_delivery)
 
-    def _on_ack_delivery(self, packet: Packet) -> None:
-        if packet.packet_type is not PacketType.ACK:
+    def _arm_timer(self) -> None:
+        oldest = min(self.outstanding) if self.outstanding else None
+        if oldest == self._timer_sequence and self._timer_id is not None:
             return
-        # ACK N cumulatively acknowledges all DATA sequence numbers below N.
-        newly_acked = [
-            seq for seq in self.outstanding
-            if seq < packet.sequence_number
-        ]
-        for seq in newly_acked:
-            state = self.outstanding.pop(seq)
-            if state.timer_id is not None:
-                self.scheduler.cancel(state.timer_id)
-            self.acked_sequences.add(seq)
+        if self._timer_id is not None:
+            self.scheduler.cancel(self._timer_id)
+        self._timer_id = None
+        self._timer_sequence = oldest
+        if oldest is not None:
+            self._timer_id = self.scheduler.schedule(
+                self.retransmission_timeout_ms,
+                lambda seq=oldest: self._on_timeout(seq),
+            )
 
-        if newly_acked and len(self.acked_sequences) < self._packet_count:
-            next_seq = max(self.acked_sequences, default=-1) + 1
-            if next_seq not in self.outstanding and next_seq < self._packet_count:
-                size = next(iter(self.outstanding.values())).packet.size_bytes if self.outstanding else 1000
-                self._send_new_packet(next_seq, size)
-
-    def _on_timeout(self, sequence_number: int, expected_state: _OutstandingPacket) -> None:
-        current = self.outstanding.get(sequence_number)
-        if current is not expected_state:
+    def _retransmit(self, sequence_number: int) -> None:
+        state = self.outstanding.get(sequence_number)
+        if state is None:
             return
-        if current.transmissions > self.max_retransmissions:
+        if state.transmissions > self.max_retransmissions:
             self.failed = True
             raise RuntimeError(
                 f"delivery failed: packet {sequence_number} exceeded "
                 f"{self.max_retransmissions} retransmissions"
             )
-
-        self.timeout_count += 1
+        state.transmissions += 1
         self.retransmission_count += 1
-        current.transmissions += 1
-        current.packet = Packet(
-            packet_type=PacketType.DATA,
-            sequence_number=sequence_number,
-            size_bytes=current.packet.size_bytes,
-            created_at_ms=self.scheduler.now_ms,
-            retransmission=True,
+        state.packet = Packet(
+            PacketType.DATA, sequence_number, state.packet.size_bytes,
+            self.scheduler.now_ms, retransmission=True,
         )
-        self._transmit_state(sequence_number, current)
+        self.channel.transmit(state.packet, self._on_data_delivery)
+
+    def _on_ack_delivery(self, packet: Packet) -> None:
+        if packet.packet_type is not PacketType.ACK:
+            return
+        ack_number = packet.sequence_number
+        if ack_number < self._last_ack:
+            return
+
+        newly_acked = [seq for seq in self.outstanding if seq < ack_number]
+        if newly_acked:
+            old_timer_sequence = self._timer_sequence
+            for seq in newly_acked:
+                self.outstanding.pop(seq, None)
+                self.acked_sequences.add(seq)
+            self._last_ack = ack_number
+
+            if self.congestion.state == CongestionController.FAST_RECOVERY:
+                if ack_number <= self.congestion.recover_sequence:
+                    self.congestion.on_partial_ack()
+                    if self.outstanding:
+                        self._retransmit(min(self.outstanding))
+                else:
+                    self.congestion.on_full_ack()
+            else:
+                self.congestion.on_new_ack(len(newly_acked))
+            self._record_window()
+
+            if old_timer_sequence in newly_acked:
+                if self._timer_id is not None:
+                    self.scheduler.cancel(self._timer_id)
+                self._timer_id = None
+                self._timer_sequence = None
+            self._arm_timer()
+            self._fill_window()
+            return
+
+        if ack_number == self._last_ack and self.outstanding:
+            fast_retransmit = self.congestion.on_duplicate_ack(
+                self._next_sequence - 1, len(self.outstanding)
+            )
+            self._record_window()
+            if fast_retransmit:
+                self._retransmit(min(self.outstanding))
+                self._arm_timer()
+            elif self.congestion.state == CongestionController.FAST_RECOVERY:
+                self._fill_window()
+
+    def _on_timeout(self, sequence_number: int) -> None:
+        self._timer_id = None
+        self._timer_sequence = None
+        if not self.outstanding or min(self.outstanding) != sequence_number:
+            self._arm_timer()
+            return
+        self.timeout_count += 1
+        self.congestion.on_timeout(len(self.outstanding))
+        self._record_window()
+        self._retransmit(sequence_number)
+        self._arm_timer()
 
     @property
     def unique_acked_count(self) -> int:
@@ -127,3 +184,11 @@ class Sender:
     @property
     def is_complete(self) -> bool:
         return self._packet_count > 0 and self.unique_acked_count == self._packet_count
+
+    @property
+    def cwnd_packets(self) -> float:
+        return self.congestion.cwnd_packets
+
+    @property
+    def ssthresh_packets(self) -> float:
+        return self.congestion.ssthresh_packets
