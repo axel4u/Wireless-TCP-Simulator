@@ -4,13 +4,14 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 5 (fair experiment foundation)
+## Current status — Milestone 6.1 (paired statistical evaluation)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
 - DATA and cumulative ACK packet model.
 - Wireless channel with configurable independent random packet loss and propagation delay.
 - Optional packet-keyed shared loss trace for repeatable cross-algorithm comparisons.
+- Multi-seed experiment runner with per-seed paired comparisons, confidence intervals, paired t-tests, and exact sign tests.
 - Receiver with out-of-order buffering and cumulative ACK generation.
 - Sliding-window sender with a single retransmission timer for the oldest unacknowledged packet.
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
@@ -116,10 +117,18 @@ Output files (created automatically):
 
 - `results/multi_seed_results.csv` — detailed result for every scenario and seed.
 - `results/multi_seed_summary.csv` — per-scenario delivery success rate, mean, and sample standard deviation.
+- `results/paired_seed_comparisons.csv` — baseline and comparison metrics plus per-seed deltas.
+- `results/paired_statistical_report.csv` — paired mean/median deltas, 95% confidence intervals, paired t-test p-values, and exact two-sided sign-test p-values.
 
 Metrics include delivered packets, unique ACKs, completion time, goodput, retransmissions, timeouts, drops, final cwnd/ssthresh, and recovery-decision counts. Goodput is calculated as successfully delivered application payload bits divided by elapsed simulation time. Means and standard deviations for performance metrics use successful runs; delivery success rate is reported separately. Failed runs remain visible in the detailed CSV with an error message.
 
 The default scenarios use -95 dBm with 5 ms queue delay for the wireless-aware case, and -95 dBm with 80 ms queue delay for congestion fallback. These are controlled simulated inputs, not live telemetry.
+
+### Paired statistical analysis
+
+The runner matches baseline and comparison runs by seed. It writes one paired row per seed and comparison, with each delta defined as comparison minus baseline. Performance comparisons use only matched seeds where both runs completed successfully; the number of matched successful pairs is recorded. Completion time, retransmissions, timeouts, and packet drops treat a negative delta as favorable; goodput treats a positive delta as favorable. Congestion-window and threshold deltas are descriptive and are not labeled as universally better or worse.
+
+The report includes a two-sided paired t-test and 95% t-based confidence interval for the mean paired difference, plus a two-sided exact sign test that counts non-tied wins and losses. These calculations use the Python standard library; no extra statistical package is required. The sign test is a useful distribution-light cross-check, while the paired t-test and confidence interval rely on the usual assumptions about independent seed-level pairs and the sampling distribution of their mean. The shared trace is packet-keyed rather than fully time-aligned, so statistical significance does not remove the simulator's modeling limitations. Do not interpret a p-value as proof of real-world network performance.
 
 **Interpretation:** the shared loss trace aligns corresponding direction/sequence/attempt keys; it is not a fully time-aligned physical channel trace. Treat the output as evidence within this simulator's assumptions, not as proof of real-network performance. Report the seed range, configuration, success rate, means, and variability.
 
@@ -131,6 +140,7 @@ The default scenarios use -95 dBm with 5 ms queue delay for the wireless-aware c
 4. Wireless-aware timeout recovery — initial policy implemented.
 5. Shared-loss experiment foundation — implemented.
 6. Multi-seed experimental evaluation and CSV reporting — implemented.
+6.1 Paired per-seed statistical evaluation — implemented.
 7. Streamlit + Plotly dashboard.
 8. Validation, documentation, and optional comparison with an established network simulator if required.
 
