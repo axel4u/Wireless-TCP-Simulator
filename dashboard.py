@@ -135,28 +135,72 @@ def run_simulation(
 def make_window_chart(history: list[tuple[float, float, str]], title: str):
     frame = pd.DataFrame(
         history, columns=["Time (ms)", "Congestion window (packets)", "TCP state"]
-    )
-    frame = frame.sort_values("Time (ms)").reset_index(drop=True)
-    figure = px.line(
-        frame,
-        x="Time (ms)",
-        y="Congestion window (packets)",
-        color="TCP state",
-        markers=True,
-        title=title,
-        animation_frame=frame.index,
-        range_x=[0, max(frame["Time (ms)"].max(), 1)],
-        range_y=[0, max(frame["Congestion window (packets)"].max() * 1.15, 1)],
-    )
-    figure.update_layout(
+    ).sort_values("Time (ms)").reset_index(drop=True)
+    if frame.empty:
+        return go.Figure()
+
+    x = frame["Time (ms)"].tolist()
+    y = frame["Congestion window (packets)"].tolist()
+    states = frame["TCP state"].tolist()
+    palette = {
+        "slow_start": "#73c7ff",
+        "fast_recovery": "#438fe0",
+        "congestion_avoidance": "#f0a0a4",
+    }
+    point_colors = [palette.get(state, "#55c7b6") for state in states]
+
+    def visible_trace(n):
+        return go.Scatter(
+            x=x[:n], y=y[:n], mode="lines+markers", name="Congestion window",
+            line={"color": "#55b7ad", "width": 3},
+            marker={"size": 8, "color": point_colors[:n]},
+            customdata=states[:n],
+            hovertemplate="Time: %{x:.1f} ms<br>cwnd: %{y:.2f} packets<br>State: %{customdata}<extra></extra>",
+        )
+
+    frames = [
+        go.Frame(
+            name=str(i),
+            data=[visible_trace(i + 1)],
+            traces=[0],
+            layout=go.Layout(title_text=f"{title} · {x[i]:.1f} ms · cwnd {y[i]:.2f}"),
+        )
+        for i in range(len(x))
+    ]
+    fig = go.Figure(data=[visible_trace(1)], frames=frames)
+    fig.update_layout(
         template="plotly_dark", paper_bgcolor="#101923", plot_bgcolor="#101923",
-        font={"family":"Inter, Segoe UI, sans-serif","color":"#dce5ed"},
-        legend_title_text="TCP state", hovermode="x unified",
-        margin={"l":18,"r":18,"t":55,"b":35},
+        font={"family": "Inter, Segoe UI, sans-serif", "color": "#dce5ed"},
+        title=title, showlegend=False, hovermode="closest",
+        margin={"l": 18, "r": 20, "t": 58, "b": 100},
+        updatemenus=[{
+            "type": "buttons", "direction": "left", "x": 0, "y": -0.25,
+            "buttons": [
+                {"label": "Play", "method": "animate", "args": [None, {
+                    "frame": {"duration": 450, "redraw": True},
+                    "transition": {"duration": 150}, "fromcurrent": True,
+                }]},
+                {"label": "Pause", "method": "animate", "args": [[None], {
+                    "frame": {"duration": 0, "redraw": False},
+                    "transition": {"duration": 0},
+                }]},
+            ],
+        }],
+        sliders=[{
+            "active": 0, "x": 0.18, "y": -0.25, "len": 0.82,
+            "currentvalue": {"prefix": "Event "},
+            "steps": [
+                {"label": str(i + 1), "method": "animate", "args": [[str(i)], {
+                    "frame": {"duration": 0, "redraw": True},
+                    "transition": {"duration": 0},
+                }]}
+                for i in range(len(x))
+            ],
+        }],
     )
-    figure.update_xaxes(gridcolor="#263544")
-    figure.update_yaxes(gridcolor="#263544")
-    return figure
+    fig.update_xaxes(title="Simulation time (ms)", gridcolor="#263544", range=[0, max(x) * 1.05 if max(x) else 1])
+    fig.update_yaxes(title="Congestion window (packets)", gridcolor="#263544", rangemode="tozero")
+    return fig
 
 
 
