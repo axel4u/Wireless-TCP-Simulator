@@ -91,3 +91,22 @@ def test_channel_uses_burst_loss_model():
     scheduler.run()
     assert received == []
     assert channel.dropped_count == 1
+
+
+
+def test_burst_model_reports_state_occupancy_and_measured_loss():
+    from simulator.burst_loss import GilbertElliottLoss
+
+    model = GilbertElliottLoss(
+        good_to_bad_probability=0.0,
+        bad_to_good_probability=1.0,
+        good_state_loss_probability=1.0,
+        bad_state_loss_probability=0.0,
+        seed=5,
+    )
+    outcomes = [model.should_drop() for _ in range(10)]
+    assert model.attempt_count == 10
+    assert model.good_state_attempts == 10
+    assert model.bad_state_attempts == 0
+    assert model.drop_count == sum(outcomes)
+    assert model.measured_loss_rate == 1.0
