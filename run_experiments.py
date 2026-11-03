@@ -15,6 +15,7 @@ from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
 from simulator.paired_statistics import paired_analysis
 from simulator.independent_statistics import independent_sample_analysis
+from simulator.shared_burst_trace import SharedBurstLossTrace
 from simulator.receiver import Receiver
 from simulator.sender import Sender
 
@@ -39,6 +40,7 @@ def run_one(
     bad_to_good_probability: float = 0.25,
     good_state_loss_probability: float = 0.01,
     bad_state_loss_probability: float = 0.80,
+    burst_trace_mode: str = "shared-time",
 ) -> dict[str, Any]:
     """Run one scenario/seed and return a flat, CSV-friendly result row."""
     if scenario not in SCENARIOS:
@@ -48,7 +50,9 @@ def run_one(
     if channel_model not in ("independent", "burst"):
         raise ValueError("channel_model must be 'independent' or 'burst'")
     if channel_model == "burst" and loss_mode == "shared":
-        raise ValueError("burst channel cannot use packet-keyed shared loss")
+        raise ValueError("burst channel requires --loss-mode random")
+    if burst_trace_mode not in ("shared-time", "sequential"):
+        raise ValueError("burst_trace_mode must be shared-time or sequential")
 
     scheduler = EventScheduler()
     trace = SharedLossTrace(loss, seed=seed) if loss_mode == "shared" else None
@@ -58,10 +62,19 @@ def run_one(
         good_state_loss_probability=good_state_loss_probability,
         bad_state_loss_probability=bad_state_loss_probability,
         seed=seed,
-    ) if channel_model == "burst" else None
+    ) if channel_model == "burst" and burst_trace_mode == "sequential" else None
+    shared_burst_trace = SharedBurstLossTrace(
+        good_to_bad_probability=good_to_bad_probability,
+        bad_to_good_probability=bad_to_good_probability,
+        good_state_loss_probability=good_state_loss_probability,
+        bad_state_loss_probability=bad_state_loss_probability,
+        seed=seed,
+    ) if channel_model == "burst" and burst_trace_mode == "shared-time" else None
+    burst_stats = shared_burst_trace or burst_model
     channel = WirelessChannel(
         scheduler, loss_probability=loss, delay_ms=delay_ms,
         seed=seed, loss_trace=trace, burst_loss_model=burst_model,
+        shared_burst_trace=shared_burst_trace,
     )
     receiver = Receiver(channel)
 
@@ -104,6 +117,7 @@ def run_one(
         "seed": seed,
         "loss_mode": loss_mode,
         "channel_model": channel_model,
+        "burst_trace_mode": burst_trace_mode if channel_model == "burst" else "",
         "packets_configured": packets,
         "loss_probability": loss if channel_model == "independent" else "",
         "good_state_loss_probability": good_state_loss_probability if channel_model == "burst" else "",
@@ -122,10 +136,10 @@ def run_one(
         "packets_dropped": channel.dropped_count,
         "transmission_attempts": channel.sent_count,
         "measured_loss_rate": channel.dropped_count / channel.sent_count if channel.sent_count else 0.0,
-        "good_state_attempts": burst_model.good_state_attempts if burst_model else "",
-        "bad_state_attempts": burst_model.bad_state_attempts if burst_model else "",
-        "good_state_occupancy_pct": 100.0 * burst_model.good_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else "",
-        "bad_state_occupancy_pct": 100.0 * burst_model.bad_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else "",
+        "good_state_attempts": burst_stats.good_state_attempts if burst_stats else "",
+        "bad_state_attempts": burst_stats.bad_state_attempts if burst_stats else "",
+        "good_state_occupancy_pct": 100.0 * burst_stats.good_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
+        "bad_state_occupancy_pct": 100.0 * burst_stats.bad_state_attempts / burst_stats.attempt_count if burst_stats and burst_stats.attempt_count else "",
         "final_cwnd_packets": sender.cwnd_packets,
         "final_ssthresh_packets": sender.ssthresh_packets,
         "wireless_recoveries": sender.wireless_recovery_count,
@@ -195,6 +209,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bad-to-good", type=float, default=0.25)
     parser.add_argument("--good-loss", type=float, default=0.01)
     parser.add_argument("--bad-loss", type=float, default=0.80)
+    parser.add_argument("--burst-trace-mode", choices=("shared-time", "sequential"), default="shared-time")
     parser.add_argument("--output-dir", type=Path, default=Path("results"))
     args = parser.parse_args()
     if args.seeds < 1 or args.packets < 1:
@@ -229,6 +244,7 @@ def main() -> None:
                 bad_to_good_probability=args.bad_to_good,
                 good_state_loss_probability=args.good_loss,
                 bad_state_loss_probability=args.bad_loss,
+                burst_trace_mode=args.burst_trace_mode,
             ))
 
     summaries = summarize(rows)
@@ -247,8 +263,13 @@ def main() -> None:
     else:
         paired_path.unlink(missing_ok=True)
         statistical_path.unlink(missing_ok=True)
-        independent_report = independent_sample_analysis(rows)
-        write_csv(independent_path, independent_report)
+        if args.burst_trace_mode == "shared-time":
+            paired_rows, statistical_report = paired_analysis(rows)
+            write_csv(paired_path, paired_rows)
+            write_csv(statistical_path, statistical_report)
+        else:
+            independent_report = independent_sample_analysis(rows)
+            write_csv(independent_path, independent_report)
 
     print("\n=== Multi-seed Wireless TCP Experiment ===")
     print(f"Seeds                 : {args.start_seed}..{args.start_seed + args.seeds - 1}")
@@ -258,6 +279,7 @@ def main() -> None:
         print(f"Loss probability      : {args.loss:.1%}")
     else:
         print(f"Gilbert-Elliott rates : GOOD loss {args.good_loss:.1%}, BAD loss {args.bad_loss:.1%}; GOOD->BAD {args.good_to_bad:.1%}, BAD->GOOD {args.bad_to_good:.1%}")
+        print(f"Burst trace mode      : {args.burst_trace_mode}")
     print(f"Loss mode             : {args.loss_mode}")
     print(f"Channel model         : {args.channel_model}")
     print("\nScenario summary (mean ± sample standard deviation; successful runs):")
