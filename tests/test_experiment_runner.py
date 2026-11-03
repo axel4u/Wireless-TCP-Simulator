@@ -103,3 +103,28 @@ def test_burst_runner_records_configured_and_observed_channel_statistics():
     assert row["transmission_attempts"] > 0
     assert 0.0 <= row["measured_loss_rate"] <= 1.0
     assert row["good_state_attempts"] + row["bad_state_attempts"] == row["transmission_attempts"]
+
+
+def test_shared_time_burst_runner_records_trace_mode_and_transmissions():
+    row = run_one(
+        "adaptive_wireless", seed=52, packets=8,
+        loss_mode="random", channel_model="burst",
+        burst_trace_mode="shared-time",
+    )
+    import json
+
+    records = json.loads(row["channel_transmission_records"])
+    assert row["burst_trace_mode"] == "shared-time"
+    assert records
+    assert all("time_ms" in record and "channel_state" in record and "dropped" in record
+               for record in records)
+    assert all(record["channel_state"] in ("GOOD", "BAD") for record in records)
+
+
+def test_same_seed_scenarios_use_same_shared_time_channel_state_timeline():
+    from simulator.shared_burst_trace import SharedBurstLossTrace
+
+    baseline_trace = SharedBurstLossTrace(seed=71)
+    adaptive_trace = SharedBurstLossTrace(seed=71)
+    for time_ms in (0, 1, 10, 25, 50, 100, 250):
+        assert baseline_trace.state_at(time_ms) == adaptive_trace.state_at(time_ms)
