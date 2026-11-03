@@ -4,7 +4,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 3
+## Current status — Milestone 4 (initial adaptive recovery)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -14,6 +14,8 @@ Implemented:
 - Sliding-window sender with a single retransmission timer for the oldest unacknowledged packet.
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
 - Congestion-window history, event log, and automated tests.
+- Initial rule-based adaptive timeout recovery using observable/simulated signal strength and queueing-delay inputs.
+- Conservative fallback: high queueing delay is treated as congestion evidence; uncertain conditions retain the standard timeout response.
 
 The congestion window is expressed in packet/MSS units to make the simulation easier to inspect. The current model uses a fixed RTO and independent random loss; it does not yet model RTT estimation, delayed ACKs, receiver-advertised windows, packet queueing, burst errors, or all TCP NewReno edge cases.
 
@@ -36,6 +38,27 @@ python -m venv .venv
 In VS Code, select the project interpreter at .venv\\Scripts\\python.exe, configure pytest from the Testing panel, and use Source Control → Pull to receive updates.
 
 ## Run scenarios
+
+Enable wireless-aware timeout recovery (weak signal, low queue delay):
+
+~~~powershell
+python main.py --packets 30 --loss 0.10 --adaptive --signal-db -95 --queue-delay-ms 5 --seed 7
+~~~
+
+Use the congestion fallback (high queueing delay takes priority):
+
+~~~powershell
+python main.py --packets 30 --loss 0.10 --adaptive --signal-db -95 --queue-delay-ms 80 --seed 7
+~~~
+
+Run the unchanged NewReno baseline:
+
+~~~powershell
+python main.py --packets 30 --loss 0.10 --seed 7
+~~~
+
+The adaptive inputs are explicit simulator measurements, not live Wi-Fi telemetry. The channel's random loss decision is not exposed to the policy. In this first increment, classification is applied to timeout recovery; duplicate-ACK fast recovery remains the conservative NewReno behavior. This is an educational policy prototype, not a complete cross-layer TCP implementation.
+
 
 Default wireless run:
 
@@ -81,7 +104,7 @@ main.py
 1. Packet and channel foundation — complete.
 2. Reliable delivery with RTO and cumulative ACKs — complete.
 3. **TCP NewReno baseline — implemented; local validation pending.**
-4. Wireless-aware recovery — use observable link signals only; fall back to standard congestion response when evidence is uncertain or congestion is indicated.
+4. Wireless-aware recovery — initial rule-based timeout policy implemented; live telemetry and broader validation remain.
 5. Experiment runner — controlled scenarios, fixed seeds, metrics, repeated trials.
 6. Streamlit + Plotly dashboard.
 7. Validation, documentation, and optional comparison with an established network simulator if required.
