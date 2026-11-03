@@ -38,11 +38,21 @@ def run_simulation(
     queue_delay_ms: float,
     loss_mode: str = "shared",
     channel_model: str = "independent",
+    good_to_bad_probability: float = 0.02,
+    bad_to_good_probability: float = 0.25,
+    good_state_loss_probability: float = 0.01,
+    bad_state_loss_probability: float = 0.80,
 ) -> dict:
     """Run one simulation and return metrics plus time-series data."""
     scheduler = EventScheduler()
     trace = SharedLossTrace(loss, seed=seed) if loss_mode == "shared" else None
-    burst_model = GilbertElliottLoss(seed=seed) if channel_model == "burst" else None
+    burst_model = GilbertElliottLoss(
+        good_to_bad_probability=good_to_bad_probability,
+        bad_to_good_probability=bad_to_good_probability,
+        good_state_loss_probability=good_state_loss_probability,
+        bad_state_loss_probability=bad_state_loss_probability,
+        seed=seed,
+    ) if channel_model == "burst" else None
     channel = WirelessChannel(
         scheduler,
         loss_probability=loss,
@@ -95,6 +105,10 @@ def run_simulation(
         "retransmissions": sender.retransmission_count,
         "timeouts": sender.timeout_count,
         "packets_dropped": channel.dropped_count,
+        "transmission_attempts": channel.sent_count,
+        "measured_loss_rate_pct": 100.0 * channel.dropped_count / channel.sent_count if channel.sent_count else 0.0,
+        "good_state_occupancy_pct": 100.0 * burst_model.good_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else None,
+        "bad_state_occupancy_pct": 100.0 * burst_model.bad_state_attempts / burst_model.attempt_count if burst_model and burst_model.attempt_count else None,
         "final_cwnd_packets": sender.cwnd_packets,
         "final_ssthresh_packets": sender.ssthresh_packets,
         "wireless_recoveries": sender.wireless_recovery_count,
@@ -258,9 +272,18 @@ with st.sidebar:
         format_func=lambda value: "Independent random loss" if value == "independent" else "Burst loss (Gilbert–Elliott)",
     )
     loss = st.slider(
-        "Packet loss probability", min_value=0.0, max_value=0.50,
+        "Packet loss probability (independent mode)", min_value=0.0, max_value=0.50,
         value=0.10, step=0.01, format="%.2f",
+        disabled=channel_model == "burst",
     )
+    if channel_model == "burst":
+        st.subheader("Gilbert–Elliott parameters")
+        good_loss = st.slider("GOOD-state loss", 0.0, 1.0, 0.01, 0.01)
+        bad_loss = st.slider("BAD-state loss", 0.0, 1.0, 0.80, 0.01)
+        good_to_bad = st.slider("GOOD → BAD transition", 0.0, 1.0, 0.02, 0.01)
+        bad_to_good = st.slider("BAD → GOOD transition", 0.0, 1.0, 0.25, 0.01)
+    else:
+        good_loss, bad_loss, good_to_bad, bad_to_good = 0.01, 0.80, 0.02, 0.25
     delay_ms = st.slider(
         "One-way propagation delay (ms)", 0.0, 200.0, 25.0, 5.0
     )
@@ -284,8 +307,9 @@ with st.sidebar:
 
 st.info(
     "Independent mode uses shared packet-keyed loss outcomes for comparison. "
-    "Burst mode uses a seeded Gilbert–Elliott two-state channel; it is stochastic "
-    "and not packet-keyed across different sender behaviours."
+    "Burst mode uses a seeded Gilbert–Elliott channel with the configurable "
+    "GOOD/BAD loss and transition probabilities above. Its runs are not "
+    "packet-keyed across different sender behaviours."
 )
 
 if run_button:
@@ -307,6 +331,10 @@ if run_button:
                 queue_delay_ms=float(effective_queue),
                 loss_mode="random" if channel_model == "burst" else "shared",
                 channel_model=channel_model,
+                good_to_bad_probability=good_to_bad,
+                bad_to_good_probability=bad_to_good,
+                good_state_loss_probability=good_loss,
+                bad_state_loss_probability=bad_loss,
             )
         st.session_state["wireless_tcp_results"] = results
         st.session_state["wireless_tcp_config"] = {
@@ -318,6 +346,10 @@ if run_button:
             "signal_dbm": signal_dbm,
             "queue_delay_ms": queue_delay_ms,
             "channel_model": channel_model,
+            "good_loss": good_loss,
+            "bad_loss": bad_loss,
+            "good_to_bad": good_to_bad,
+            "bad_to_good": bad_to_good,
         }
 
 results = st.session_state.get("wireless_tcp_results")
