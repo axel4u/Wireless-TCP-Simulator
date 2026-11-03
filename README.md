@@ -4,7 +4,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 7 (interactive dashboard)
+## Current status — Milestone 8 (interactive packet-flow visualizer)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -18,6 +18,7 @@ Implemented:
 - Initial rule-based adaptive timeout recovery using observable/simulated signal strength and queueing-delay inputs.
 - Congestion-window history, event log, and automated tests.
 - Interactive Streamlit + Plotly dashboard for scenario comparison, metrics, congestion-window history, and recovery decisions.
+- Step-by-step packet-flow animation built from the simulator's recorded DATA/ACK channel events, including visible packet drops and reverse-direction ACK delivery.
 
 The congestion window is expressed in packet/MSS units. The model uses a fixed RTO and does not yet model RTT estimation, delayed ACKs, receiver-advertised windows, packet queueing, burst-error channels, or all TCP NewReno edge cases.
 
@@ -137,7 +138,7 @@ The report includes a two-sided paired t-test and 95% t-based confidence interva
 
 **Interpretation:** the shared loss trace aligns corresponding direction/sequence/attempt keys; it is not a fully time-aligned physical channel trace. Treat the output as evidence within this simulator's assumptions, not as proof of real-network performance. Report the seed range, configuration, success rate, means, and variability.
 
-## Interactive dashboard (Milestone 7)
+## Interactive dashboard and packet-flow animation (Milestones 7–8)
 
 Install the dashboard dependencies:
 
@@ -151,7 +152,7 @@ Launch the app from the repository root:
 python -m streamlit run dashboard.py
 ~~~
 
-The dashboard compares the NewReno baseline, adaptive wireless recovery, and adaptive congestion-fallback scenarios using the same seed and packet-keyed shared-loss mode. It provides configurable packet count, loss probability, propagation delay, RTO, seed, signal strength, and queueing delay; metric summaries; Plotly completion-time and goodput charts; congestion-window history; and adaptive recovery-decision details.
+The dashboard compares the NewReno baseline, adaptive wireless recovery, and adaptive congestion-fallback scenarios using the same seed and packet-keyed shared-loss mode. It provides configurable packet count, loss probability, propagation delay, RTO, seed, signal strength, and queueing delay; metric summaries; Plotly completion-time and goodput charts; congestion-window history; and adaptive recovery-decision details. The packet-flow section animates the recorded DATA and ACK events across sender, wireless channel, and receiver, with dropped packets marked at the channel and a step slider plus event-log table. This is a visualization of the completed discrete-event run, not a live socket-level packet capture.
 
 The dashboard's signal-strength and queue-delay values are simulated inputs, not live Wi-Fi measurements. Its congestion-evidence control scenario enforces at least 40 ms queue delay so that the congestion fallback branch can be inspected even when the wireless queue-delay slider is lower. The shared loss trace remains packet-keyed rather than a fully time-aligned physical channel trace.
 
@@ -164,8 +165,9 @@ The dashboard's signal-strength and queue-delay values are simulated inputs, not
 5. Shared-loss experiment foundation — implemented.
 6. Multi-seed experimental evaluation and CSV reporting — implemented.
 6.1 Paired per-seed statistical evaluation — implemented.
-7. Streamlit + Plotly dashboard — initial interactive version implemented.
-8. Validation, documentation, and optional comparison with an established network simulator if required.
+7. Streamlit + Plotly dashboard — implemented.
+8. Interactive packet-level flow visualization — initial version implemented.
+9. Validation, documentation, and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
 
