@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 
 from simulator.channel import WirelessChannel
+from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
 from simulator.event_scheduler import EventScheduler
 from simulator.receiver import Receiver
 from simulator.sender import Sender
@@ -19,6 +20,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7, help="random seed")
     parser.add_argument("--initial-cwnd", type=float, default=1.0, help="initial congestion window in packets")
     parser.add_argument("--ssthresh", type=float, default=8.0, help="initial slow-start threshold in packets")
+    parser.add_argument("--adaptive", action="store_true", help="enable wireless-aware timeout recovery")
+    parser.add_argument("--signal-db", type=float, default=-65.0, help="simulated signal strength in dBm")
+    parser.add_argument("--queue-delay-ms", type=float, default=0.0, help="simulated queueing delay in ms")
     args = parser.parse_args()
     if args.packets < 1:
         parser.error("--packets must be >= 1")
@@ -39,12 +43,21 @@ def main() -> None:
     channel = WirelessChannel(scheduler, loss_probability=args.loss,
                               delay_ms=args.delay_ms, seed=args.seed)
     receiver = Receiver(channel)
+    adaptive_policy = None
+    if args.adaptive:
+        adaptive_policy = AdaptiveRecoveryPolicy(
+            LinkMetrics(
+                signal_strength_dbm=args.signal_db,
+                queue_delay_ms=args.queue_delay_ms,
+            )
+        )
     sender = Sender(
         channel, receiver, scheduler,
         retransmission_timeout_ms=args.rto_ms,
         max_retransmissions=args.max_retransmissions,
         initial_cwnd_packets=args.initial_cwnd,
         initial_ssthresh_packets=args.ssthresh,
+        adaptive_policy=adaptive_policy,
     )
     sender.send_batch(args.packets)
     try:
@@ -70,6 +83,14 @@ def main() -> None:
     print(f"Delivery complete       : {'YES' if sender.is_complete else 'NO'}")
     print(f"Packets dropped         : {channel.dropped_count}")
     print(f"Virtual simulation time : {scheduler.now_ms:.2f} ms")
+    if args.adaptive:
+        print(f"Wireless recoveries     : {sender.wireless_recovery_count}")
+        print(f"Congestion/fallback rec.: {sender.congestion_recovery_count}")
+        print(f"Link signal strength    : {args.signal_db:.1f} dBm")
+        print(f"Queueing delay input    : {args.queue_delay_ms:.2f} ms")
+        print("Adaptive decisions      :")
+        for time_ms, decision, trigger in sender.adaptive_decisions:
+            print(f"  {time_ms:8.2f} ms | {trigger} -> {decision}")
     print("\nCongestion-window history (time_ms, cwnd_packets, state):")
     for time_ms, cwnd, state in sender.window_history:
         print(f"  {time_ms:8.2f} ms | cwnd={cwnd:6.2f} | {state}")
