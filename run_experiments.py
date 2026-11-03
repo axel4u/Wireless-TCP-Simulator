@@ -10,6 +10,7 @@ from typing import Any
 
 from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
 from simulator.channel import WirelessChannel
+from simulator.burst_loss import GilbertElliottLoss
 from simulator.event_scheduler import EventScheduler
 from simulator.loss_trace import SharedLossTrace
 from simulator.paired_statistics import paired_analysis
@@ -32,18 +33,24 @@ def run_one(
     wireless_queue_delay_ms: float = 5.0,
     congestion_queue_delay_ms: float = 80.0,
     loss_mode: str = "shared",
+    channel_model: str = "independent",
 ) -> dict[str, Any]:
     """Run one scenario/seed and return a flat, CSV-friendly result row."""
     if scenario not in SCENARIOS:
         raise ValueError(f"unknown scenario: {scenario}")
     if loss_mode not in ("shared", "random"):
         raise ValueError("loss_mode must be 'shared' or 'random'")
+    if channel_model not in ("independent", "burst"):
+        raise ValueError("channel_model must be 'independent' or 'burst'")
+    if channel_model == "burst" and loss_mode == "shared":
+        raise ValueError("burst channel cannot use packet-keyed shared loss")
 
     scheduler = EventScheduler()
     trace = SharedLossTrace(loss, seed=seed) if loss_mode == "shared" else None
+    burst_model = GilbertElliottLoss(seed=seed) if channel_model == "burst" else None
     channel = WirelessChannel(
         scheduler, loss_probability=loss, delay_ms=delay_ms,
-        seed=seed, loss_trace=trace,
+        seed=seed, loss_trace=trace, burst_loss_model=burst_model,
     )
     receiver = Receiver(channel)
 
@@ -85,6 +92,7 @@ def run_one(
         "scenario": scenario,
         "seed": seed,
         "loss_mode": loss_mode,
+        "channel_model": channel_model,
         "packets_configured": packets,
         "loss_probability": loss,
         "signal_dbm": signal_dbm if policy is not None else "",
@@ -161,6 +169,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rto-ms", type=float, default=100.0)
     parser.add_argument("--max-retransmissions", type=int, default=20)
     parser.add_argument("--loss-mode", choices=("shared", "random"), default="shared")
+    parser.add_argument("--channel-model", choices=("independent", "burst"), default="independent")
     parser.add_argument("--output-dir", type=Path, default=Path("results"))
     args = parser.parse_args()
     if args.seeds < 1 or args.packets < 1:
@@ -173,6 +182,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--delay-ms must be >= 0 and --rto-ms must be > 0")
     if args.max_retransmissions < 0:
         parser.error("--max-retransmissions must be >= 0")
+    if args.channel_model == "burst" and args.loss_mode == "shared":
+        parser.error("burst channel requires --loss-mode random")
     return args
 
 
@@ -185,7 +196,7 @@ def main() -> None:
                 scenario=scenario, seed=seed, packets=args.packets,
                 loss=args.loss, delay_ms=args.delay_ms, rto_ms=args.rto_ms,
                 max_retransmissions=args.max_retransmissions,
-                loss_mode=args.loss_mode,
+                loss_mode=args.loss_mode, channel_model=args.channel_model,
             ))
 
     summaries = summarize(rows)
@@ -205,6 +216,7 @@ def main() -> None:
     print(f"Packets per run       : {args.packets}")
     print(f"Loss probability      : {args.loss:.1%}")
     print(f"Loss mode             : {args.loss_mode}")
+    print(f"Channel model         : {args.channel_model}")
     print("\nScenario summary (mean ± sample standard deviation; successful runs):")
     for item in summaries:
         print(f"\n{item['scenario']} — success {item['successful_runs']}/{item['runs']} "
@@ -231,9 +243,14 @@ def main() -> None:
                 f"improved/equal/worsened={item['improved_seeds']}/"
                 f"{item['equal_seeds']}/{item['worsened_seeds']}"
             )
-    print("\nNote: packet-keyed shared loss aligns corresponding direction/sequence/attempt "
-          "keys, not a fully time-aligned physical channel trace. Interpret results "
-          "within the simulator's stated assumptions.")
+    if args.channel_model == "burst":
+        print("\nNote: burst-loss runs use independent seeded sequential streams per scenario. "
+              "Seed-matched differences are exploratory, not strictly paired; do not "
+              "interpret paired-test p-values as confirmatory evidence.")
+    else:
+        print("\nNote: packet-keyed shared loss aligns corresponding direction/sequence/attempt "
+              "keys, not a fully time-aligned physical channel trace. Interpret results "
+              "within the simulator's stated assumptions.")
 
 
 if __name__ == "__main__":
