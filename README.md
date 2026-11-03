@@ -4,7 +4,7 @@ A Python discrete-event simulator for studying TCP behavior over unreliable wire
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 6.1 (paired statistical evaluation)
+## Current status — Milestone 7 (interactive dashboard)
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -17,6 +17,7 @@ Implemented:
 - Congestion window (cwnd), slow start, congestion avoidance, duplicate ACK counting, fast retransmit, fast recovery, and timeout response.
 - Initial rule-based adaptive timeout recovery using observable/simulated signal strength and queueing-delay inputs.
 - Congestion-window history, event log, and automated tests.
+- Interactive Streamlit + Plotly dashboard for scenario comparison, metrics, congestion-window history, and recovery decisions.
 
 The congestion window is expressed in packet/MSS units. The model uses a fixed RTO and does not yet model RTT estimation, delayed ACKs, receiver-advertised windows, packet queueing, burst-error channels, or all TCP NewReno edge cases.
 
@@ -96,6 +97,7 @@ tests/
   test_paired_statistics.py
   test_sender.py
 main.py
+dashboard.py
 ~~~
 
 ## Multi-seed experimental evaluation
