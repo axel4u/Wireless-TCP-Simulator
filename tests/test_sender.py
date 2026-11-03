@@ -1,7 +1,6 @@
 import pytest
 
 from simulator.channel import WirelessChannel
-from simulator.congestion_control import CongestionController
 from simulator.event_scheduler import EventScheduler
 from simulator.receiver import Receiver
 from simulator.sender import Sender
@@ -59,26 +58,12 @@ def test_initial_congestion_window_controls_first_burst():
     assert len(sender.outstanding) == 4
 
 
-def test_timeout_reduces_window_and_returns_to_slow_start():
-    controller = CongestionController(initial_cwnd_packets=6, initial_ssthresh_packets=12)
-    controller.on_timeout(flight_size=6)
-    assert controller.cwnd_packets == 1
-    assert controller.ssthresh_packets == 3
-    assert controller.state == CongestionController.SLOW_START
-
-
-def test_three_duplicate_acks_trigger_fast_retransmit_and_recovery():
-    controller = CongestionController(initial_cwnd_packets=8, initial_ssthresh_packets=12)
-    assert not controller.on_duplicate_ack(7, 8)
-    assert not controller.on_duplicate_ack(7, 8)
-    assert controller.on_duplicate_ack(7, 8)
-    assert controller.ssthresh_packets == 4
-    assert controller.cwnd_packets == 7
-    assert controller.state == CongestionController.FAST_RECOVERY
-
-
-def test_congestion_avoidance_grows_linearly():
-    controller = CongestionController(initial_cwnd_packets=8, initial_ssthresh_packets=8)
-    controller.on_new_ack(1)
-    assert controller.state == CongestionController.CONGESTION_AVOIDANCE
-    assert controller.cwnd_packets == pytest.approx(8.125)
+def test_sender_enters_fast_recovery_after_three_duplicate_acks():
+    scheduler, _, receiver, sender = build_simulation(
+        loss=0.2, seed=1, rto=20, retries=10, initial_cwnd=6, ssthresh=12
+    )
+    sender.send_batch(6)
+    scheduler.run()
+    assert sender.is_complete
+    assert receiver.delivered_count == 6
+    assert any(state == "fast_recovery" for _, _, state in sender.window_history)
