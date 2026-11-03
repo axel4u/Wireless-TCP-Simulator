@@ -87,9 +87,13 @@ class Sender:
     def _on_data_delivery(self, packet: Packet) -> None:
         self.receiver.receive(packet, self._on_ack_delivery)
 
-    def _arm_timer(self) -> None:
+    def _arm_timer(self, force_restart: bool = False) -> None:
         oldest = min(self.outstanding) if self.outstanding else None
-        if oldest == self._timer_sequence and self._timer_id is not None:
+        if (
+            not force_restart
+            and oldest == self._timer_sequence
+            and self._timer_id is not None
+        ):
             return
         if self._timer_id is not None:
             self.scheduler.cancel(self._timer_id)
@@ -136,7 +140,7 @@ class Sender:
 
             if self.congestion.state == CongestionController.FAST_RECOVERY:
                 if ack_number <= self.congestion.recover_sequence:
-                    self.congestion.on_partial_ack()
+                    self.congestion.on_partial_ack(len(newly_acked))
                     if self.outstanding:
                         self._retransmit(min(self.outstanding))
                 else:
@@ -161,7 +165,9 @@ class Sender:
             self._record_window()
             if fast_retransmit:
                 self._retransmit(min(self.outstanding))
-                self._arm_timer()
+                # Fast retransmit starts a fresh RTO for the oldest
+                # outstanding segment rather than retaining its old deadline.
+                self._arm_timer(force_restart=True)
             elif self.congestion.state == CongestionController.FAST_RECOVERY:
                 self._fill_window()
 
