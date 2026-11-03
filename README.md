@@ -33,6 +33,7 @@ cd Wireless-TCP-Simulator
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py
+dashboard.py
 .\.venv\Scripts\python.exe -m pytest -q
 ~~~
 
@@ -134,6 +135,24 @@ The report includes a two-sided paired t-test and 95% t-based confidence interva
 
 **Interpretation:** the shared loss trace aligns corresponding direction/sequence/attempt keys; it is not a fully time-aligned physical channel trace. Treat the output as evidence within this simulator's assumptions, not as proof of real-network performance. Report the seed range, configuration, success rate, means, and variability.
 
+## Interactive dashboard (Milestone 7)
+
+Install the dashboard dependencies:
+
+~~~powershell
+python -m pip install -r requirements.txt
+~~~
+
+Launch the app from the repository root:
+
+~~~powershell
+python -m streamlit run dashboard.py
+~~~
+
+The dashboard compares the NewReno baseline, adaptive wireless recovery, and adaptive congestion-fallback scenarios using the same seed and packet-keyed shared-loss mode. It provides configurable packet count, loss probability, propagation delay, RTO, seed, signal strength, and queueing delay; metric summaries; Plotly completion-time and goodput charts; congestion-window history; and adaptive recovery-decision details.
+
+The dashboard's signal-strength and queue-delay values are simulated inputs, not live Wi-Fi measurements. Its congestion-evidence control scenario enforces at least 40 ms queue delay so that the congestion fallback branch can be inspected even when the wireless queue-delay slider is lower. The shared loss trace remains packet-keyed rather than a fully time-aligned physical channel trace.
+
 ## Planned milestones
 
 1. Packet and channel foundation — complete.
@@ -143,7 +162,7 @@ The report includes a two-sided paired t-test and 95% t-based confidence interva
 5. Shared-loss experiment foundation — implemented.
 6. Multi-seed experimental evaluation and CSV reporting — implemented.
 6.1 Paired per-seed statistical evaluation — implemented.
-7. Streamlit + Plotly dashboard.
+7. Streamlit + Plotly dashboard — initial interactive version implemented.
 8. Validation, documentation, and optional comparison with an established network simulator if required.
 
 ## Experimental integrity
