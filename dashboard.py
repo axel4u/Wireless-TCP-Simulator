@@ -193,8 +193,8 @@ def make_packet_animation(events: list[str]):
             "type": "buttons", "showactive": False, "x": 0.05, "y": -0.18,
             "buttons": [
                 {"label": "▶ Play", "method": "animate",
-                 "args": [None, {"frame": {"duration": 450, "redraw": True},
-                                 "transition": {"duration": 150},
+                 "args": [None, {"frame": {"duration": 1200, "redraw": True},
+                                 "transition": {"duration": 300},
                                  "fromcurrent": True}]},
                 {"label": "❚❚ Pause", "method": "animate",
                  "args": [[None], {"mode": "immediate", "frame": {"duration": 0},
