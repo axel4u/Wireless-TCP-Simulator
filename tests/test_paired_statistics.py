@@ -58,7 +58,7 @@ def test_goodput_improvement_uses_positive_delta_direction():
 
     assert goodput["improved_seeds"] == 1
     assert goodput["worsened_seeds"] == 1
-    assert math.isclose(goodput["mean_delta_comparison_minus_baseline"], 0.0)
+    assert math.isclose(goodput["mean_delta_comparison_minus_baseline"], 0.0, abs_tol=1e-12)
 
 
 def test_failed_pairs_are_excluded_from_performance_tests():
