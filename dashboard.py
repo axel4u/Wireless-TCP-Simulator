@@ -379,10 +379,14 @@ if not results:
     )
 else:
     st.subheader("Simulation results")
+    channel_caption = (
+        f"GOOD loss {config['good_loss']:.0%}, BAD loss {config['bad_loss']:.0%}; "
+        f"GOOD→BAD {config['good_to_bad']:.0%}, BAD→GOOD {config['bad_to_good']:.0%}"
+        if config["channel_model"] == "burst" else f"{config['loss']:.0%} independent loss"
+    )
     st.caption(
-        f"{config['packets']} packets · {config['loss']:.0%} loss · "
-        f"{config['delay_ms']:.0f} ms one-way delay · "
-        f"{config['channel_model']} channel · seed {config['seed']}"
+        f"{config['packets']} packets · {channel_caption} · "
+        f"{config['delay_ms']:.0f} ms one-way delay · seed {config['seed']}"
     )
 
     summary_rows = []
@@ -400,6 +404,9 @@ else:
                 "Retransmissions": result["retransmissions"],
                 "Timeouts": result["timeouts"],
                 "Dropped": result["packets_dropped"],
+                "Measured loss (%)": result["measured_loss_rate_pct"],
+                "GOOD occupancy (%)": result["good_state_occupancy_pct"],
+                "BAD occupancy (%)": result["bad_state_occupancy_pct"],
                 "Final cwnd": result["final_cwnd_packets"],
             }
         )
