@@ -1,10 +1,31 @@
+<div align="center">
+
+# Wireless TCP Simulator
+
+### From packet loss → adaptive recovery → measurable performance
+
+A discrete-event simulation platform for studying TCP behaviour over unreliable wireless links.
+
+**An explainable, rule-based recovery approach with conservative congestion handling.**
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![TCP](https://img.shields.io/badge/TCP-NewReno--style-5B5BD6?style=for-the-badge)](#)
+[![Simulation](https://img.shields.io/badge/Network-Simulation-0F9D8A?style=for-the-badge)](#)
+[![Tests](https://img.shields.io/badge/Tests-80%20passing-16865A?style=for-the-badge)](#)
+
+[Overview](#wireless-tcp-simulator) · [Architecture](#architecture-at-a-glance) · [How it works](#adaptive-recovery-policy) · [Experiments](#experimental-results) · [Run locally](#windows-setup) · [Documentation](#project-documentation)
+
+</div>
+
+---
+
 # Wireless TCP Simulator
 
 A Python discrete-event simulator for studying TCP behavior over unreliable wireless links. It compares a simplified TCP NewReno baseline with a conservative wireless-aware timeout recovery policy.
 
 > **Research boundary:** This is an educational discrete-event model, not a modified operating-system TCP stack or a complete standards-conformance implementation. Results must be measured; no performance improvement is claimed in advance.
 
-## Current status — Milestone 12 (sensitivity analysis completed)
+## Project status — Milestone 12 complete
 
 Implemented:
 - Deterministic discrete-event scheduler with cancellable events.
@@ -84,6 +105,36 @@ The independent-loss model samples each transmission attempt separately. The opt
 
 The dashboard lets you select independent random loss or burst loss and choose either a shared time-indexed trace or the original sequential stream. For burst mode, it exposes the four Gilbert–Elliott probabilities and reports measured loss rate plus GOOD/BAD transmission-state share. The multi-seed runner supports `--channel-model burst --loss-mode random`, `--burst-trace-mode shared-time|sequential`, and the four probability arguments `--good-to-bad`, `--bad-to-good`, `--good-loss`, and `--bad-loss`. Shared-time mode uses the same deterministic GOOD/BAD state timeline at each virtual-time slot for all scenarios with the same seed, and therefore supports paired per-seed analysis under a common channel environment. The loss decision is keyed by time slot, direction, sequence, and attempt; packets do not necessarily align one-to-one across algorithms. Sequential mode retains independent per-scenario random streams and uses Welch independent-sample comparisons.
 
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    A["TCP Sender"] --> B["Wireless Channel"]
+    B --> C["TCP Receiver"]
+    C -->|"Cumulative ACK"| B
+    B -->|"ACK"| A
+    A --> D["Adaptive Timeout Policy"]
+    D --> E["Wireless-aware recovery"]
+    D --> F["Conservative congestion fallback"]
+    G["Experiment Runner"] --> A
+    G --> H["Metrics and Statistics"]
+    H --> I["CSV Reports"]
+    H --> J["Streamlit Dashboard"]
+```
+
+## Adaptive recovery policy
+
+The policy evaluates simulated signal strength and queue delay when a retransmission timeout occurs.
+
+| Condition | Classification | Recovery |
+|---|---|---|
+| Queue delay ≥ 40 ms | Likely congestion | Standard TCP timeout response |
+| Queue delay < 40 ms and signal ≤ -80 dBm | Likely wireless | Retransmit without timeout congestion-window reduction |
+| Otherwise | Uncertain | Standard TCP timeout response |
+
+Congestion evidence always takes priority over weak signal strength. The policy is rule-based, not machine-learning-based. Duplicate-ACK fast recovery remains the NewReno-style baseline behaviour.
+
 ## Adaptive policy assumptions
 
 The adaptive inputs are explicit simulator measurements, not live Wi-Fi telemetry. The channel's hidden loss decision is not exposed to the policy. In this prototype, classification is applied to timeout recovery; duplicate-ACK fast recovery remains the conservative NewReno behavior. High queueing delay takes priority as congestion evidence; uncertain conditions use the standard timeout response.
@@ -111,6 +162,34 @@ tests/
 main.py
 dashboard.py
 ~~~
+
+
+## Experimental results
+
+The following results are from the reported 100-seed shared time-indexed Gilbert–Elliott burst-loss experiment. All 100 runs completed successfully in each scenario.
+
+| Metric | NewReno-style baseline | Adaptive wireless |
+|---|---:|---:|
+| Mean completion time | 758.500 ms | 632.000 ms |
+| Mean goodput | 0.497 Mbps | 0.531 Mbps |
+| Mean retransmissions | 3.010 | 2.700 |
+| Mean timeouts | 2.810 | 2.300 |
+| Mean packet drops | 4.670 | 4.380 |
+
+**Paired statistical results (adaptive minus baseline):**
+
+| Metric | Mean difference | 95% confidence interval | p-value |
+|---|---:|---|---:|
+| Completion time | -126.5 ms | [-191.173, -61.827] | 0.000188 |
+| Goodput | +0.034 Mbps | [+0.018, +0.050] | 0.000045 |
+| Timeouts | -0.510 | [-0.951, -0.069] | 0.023858 |
+
+These are simulator-specific results, not measurements from a physical Wi-Fi network. Goodput and completion time are mathematically related and should not be treated as independent evidence. See the detailed experimental section below for configurations, sensitivity results, and limitations.
+
+## Project documentation
+
+- [Final report figures and architecture diagrams](docs/FINAL_REPORT_FIGURES.md)
+- [Literature review and IEEE references](docs/LITERATURE_REVIEW_AND_REFERENCES.md)
 
 ## Multi-seed experimental evaluation
 
