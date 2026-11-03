@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 
-from simulator.channel import WirelessChannel
 from simulator.adaptive_policy import AdaptiveRecoveryPolicy, LinkMetrics
+from simulator.channel import WirelessChannel
 from simulator.event_scheduler import EventScheduler
+from simulator.loss_trace import SharedLossTrace
 from simulator.receiver import Receiver
 from simulator.sender import Sender
 
@@ -18,6 +19,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rto-ms", type=float, default=100.0, help="retransmission timeout")
     parser.add_argument("--max-retransmissions", type=int, default=20, help="retry limit per packet")
     parser.add_argument("--seed", type=int, default=7, help="random seed")
+    parser.add_argument(
+        "--loss-mode", choices=("random", "shared"), default="random",
+        help="random uses sequential RNG; shared uses packet-keyed outcomes comparable across runs",
+    )
     parser.add_argument("--initial-cwnd", type=float, default=1.0, help="initial congestion window in packets")
     parser.add_argument("--ssthresh", type=float, default=8.0, help="initial slow-start threshold in packets")
     parser.add_argument("--adaptive", action="store_true", help="enable wireless-aware timeout recovery")
@@ -40,8 +45,18 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     scheduler = EventScheduler()
-    channel = WirelessChannel(scheduler, loss_probability=args.loss,
-                              delay_ms=args.delay_ms, seed=args.seed)
+    shared_trace = (
+        SharedLossTrace(args.loss, seed=args.seed)
+        if args.loss_mode == "shared"
+        else None
+    )
+    channel = WirelessChannel(
+        scheduler,
+        loss_probability=args.loss,
+        delay_ms=args.delay_ms,
+        seed=args.seed,
+        loss_trace=shared_trace,
+    )
     receiver = Receiver(channel)
     adaptive_policy = None
     if args.adaptive:
@@ -66,7 +81,9 @@ def main() -> None:
         print(f"\nSIMULATION FAILED: {error}")
         raise SystemExit(1) from error
 
-    print("\n=== Wireless TCP Simulator: Milestone 3 — TCP NewReno baseline ===")
+    mode = "wireless-aware adaptive" if args.adaptive else "TCP NewReno baseline"
+    print(f"\n=== Wireless TCP Simulator: {mode} ===")
+    print(f"Loss decision mode      : {args.loss_mode}")
     print(f"Configured DATA packets : {args.packets}")
     print(f"Channel loss probability: {args.loss:.1%}")
     print(f"One-way delay           : {args.delay_ms:.2f} ms")
