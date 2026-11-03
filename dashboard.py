@@ -122,7 +122,7 @@ def make_window_chart(history: list[tuple[float, float, str]], title: str):
 def make_packet_animation(events: list[str]):
     """Build a step-by-step packet journey from the channel's recorded events."""
     pattern = re.compile(
-        r"^\\s*([0-9.]+) ms \\| (DATA|ACK) seq=(\\d+) (SENT|DROPPED|DELIVERED)$"
+        r"^\s*([0-9.]+) ms \| (DATA|ACK) seq=(\d+) (SENT|DROPPED|DELIVERED)$"
     )
     parsed = []
     for raw in events:
@@ -197,7 +197,7 @@ def make_packet_animation(events: list[str]):
                                  "transition": {"duration": 150},
                                  "fromcurrent": True}]},
                 {"label": "❚❚ Pause", "method": "animate",
-                 "args": [[None], {"mode": "立即", "frame": {"duration": 0},
+                 "args": [[None], {"mode": "immediate", "frame": {"duration": 0},
                                    "transition": {"duration": 0}]}},
             ],
         }],
