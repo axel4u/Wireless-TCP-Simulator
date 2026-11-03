@@ -144,7 +144,14 @@ def make_window_chart(history: list[tuple[float, float, str]], title: str):
         markers=True,
         title=title,
     )
-    figure.update_layout(legend_title_text="TCP state", hovermode="x unified")
+    figure.update_layout(
+        template="plotly_dark", paper_bgcolor="#101923", plot_bgcolor="#101923",
+        font={"family":"Inter, Segoe UI, sans-serif","color":"#dce5ed"},
+        legend_title_text="TCP state", hovermode="x unified",
+        margin={"l":18,"r":18,"t":55,"b":35},
+    )
+    figure.update_xaxes(gridcolor="#263544")
+    figure.update_yaxes(gridcolor="#263544")
     return figure
 
 
@@ -225,6 +232,8 @@ def make_packet_animation(events: list[str]):
         yshift=-4,
     )
     figure.update_layout(
+        template="plotly_dark", paper_bgcolor="#101923", plot_bgcolor="#101923",
+        font={"family":"Inter, Segoe UI, sans-serif","color":"#dce5ed"},
         title=f"Packet journey · {len(parsed)} channel events",
         xaxis={
             "range": [-0.35, 2.35], "tickmode": "array",
@@ -238,11 +247,11 @@ def make_packet_animation(events: list[str]):
         updatemenus=[{
             "type": "buttons", "showactive": False, "x": 0.05, "y": -0.18,
             "buttons": [
-                {"label": "▶ Play", "method": "animate",
+                {"label": "Play", "method": "animate",
                  "args": [None, {"frame": {"duration": 1200, "redraw": True},
                                  "transition": {"duration": 300},
                                  "fromcurrent": True}]},
-                {"label": "❚❚ Pause", "method": "animate",
+                {"label": "Pause", "method": "animate",
                  "args": [[None], {"mode": "immediate", "frame": {"duration": 0},
                                    "transition": {"duration": 0}}]},
             ],
@@ -265,18 +274,52 @@ def make_packet_animation(events: list[str]):
 
 st.set_page_config(
     page_title="Wireless TCP Simulator",
-    page_icon="📡",
     layout="wide",
 )
 
-st.title("📡 Wireless TCP Simulator")
-st.caption(
-    "Explore a simplified NewReno baseline and a rule-based wireless-aware "
-    "timeout recovery policy."
+
+st.markdown(
+    """
+    <style>
+    :root { --app-bg:#0b1017; --panel:#111a24; --line:#263544; --text:#edf2f7; --muted:#9aabba; --accent:#43b7a5; }
+    .stApp { background:var(--app-bg); color:var(--text); }
+    [data-testid="stHeader"] { background:rgba(11,16,23,.94); }
+    [data-testid="stSidebar"] { background:#0e151e; border-right:1px solid var(--line); }
+    [data-testid="stSidebar"] > div { padding-top:1.5rem; }
+    .block-container { max-width:1440px; padding-top:2rem; padding-bottom:3rem; }
+    h1,h2,h3 { color:var(--text)!important; letter-spacing:-.025em; }
+    h1 { font-size:2.15rem!important; font-weight:650!important; }
+    h2 { font-size:1.35rem!important; font-weight:620!important; margin-top:1.5rem!important; }
+    h3 { font-size:1.05rem!important; font-weight:600!important; }
+    [data-testid="stCaptionContainer"],.stCaption { color:var(--muted)!important; }
+    [data-testid="stMetric"] { background:linear-gradient(145deg,#14212c,#101923); border:1px solid var(--line); border-radius:12px; padding:16px 18px; min-height:112px; }
+    [data-testid="stMetricLabel"] p { color:var(--muted)!important; font-size:.82rem!important; font-weight:550; }
+    [data-testid="stMetricValue"] { color:var(--text)!important; font-weight:650; }
+    div[data-testid="stDataFrame"],div[data-testid="stPlotlyChart"] { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#101923; }
+    .stButton>button { border-radius:8px; border:1px solid #3b9f94; background:#238b80; color:white; font-weight:600; min-height:2.7rem; }
+    .stButton>button:hover { background:#2a9d90; border-color:#55c7b6; color:white; }
+    [data-baseweb="select"]>div,[data-baseweb="input"]>div { background:#111b26; border-color:#304253; border-radius:8px; }
+    hr { border-color:var(--line)!important; }
+    .dashboard-kicker { color:var(--accent); font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:.45rem; }
+    .dashboard-subtitle { color:var(--muted); font-size:1rem; max-width:850px; line-height:1.6; margin-top:-.3rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+st.markdown('<div class="dashboard-kicker">NETWORK PERFORMANCE LAB</div>', unsafe_allow_html=True)
+st.title("Wireless TCP Simulator")
+st.markdown(
+    '<div class="dashboard-subtitle">Evaluate a NewReno-style baseline against '
+    'a rule-based wireless-aware timeout recovery policy under controlled '
+    'packet-loss and channel conditions.</div>',
+    unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("Simulation configuration")
+    st.markdown("### Experiment setup")
+    st.caption("Configure network conditions and recovery inputs.")
     packets = st.slider("DATA packets", min_value=5, max_value=100, value=30, step=5)
     channel_model = st.selectbox(
         "Wireless channel model",
@@ -321,7 +364,7 @@ with st.sidebar:
         "These are controlled simulator inputs, not measurements from your "
         "computer's Wi-Fi adapter."
     )
-    run_button = st.button("Run simulation comparison", type="primary", width="stretch")
+    run_button = st.button("Run comparison", type="primary", width="stretch")
 
 st.info(
     "Independent mode uses shared packet-keyed loss outcomes for comparison. "
@@ -398,7 +441,7 @@ if not results:
         """
     )
 else:
-    st.subheader("Simulation results")
+    st.subheader("Performance overview")
     channel_caption = (
         f"GOOD loss {config['good_loss']:.0%}, BAD loss {config['bad_loss']:.0%}; "
         f"GOOD→BAD {config['good_to_bad']:.0%}, BAD→GOOD {config['bad_to_good']:.0%}"
@@ -465,7 +508,7 @@ else:
             x="Scenario",
             y="Completion (ms)",
             color="Scenario",
-            title="Completion time (lower is better)",
+            title="Completion time · lower is better",
         )
         st.plotly_chart(figure, width="stretch")
     with right:
@@ -474,19 +517,19 @@ else:
             x="Scenario",
             y="Goodput (Mbps)",
             color="Scenario",
-            title="Goodput (higher is better)",
+            title="Goodput · higher is better",
         )
         st.plotly_chart(figure, width="stretch")
 
 
-    st.subheader("Wireless channel trace")
+    st.subheader("Channel transmission records")
     st.caption("Each row records virtual time, packet direction, sequence, attempt, channel state and loss decision.")
     trace_label = st.selectbox("Choose channel trace", list(SCENARIOS), key="channel_trace_scenario")
     trace_records = results[trace_label]["channel_transmission_records"]
     if trace_records:
         st.dataframe(pd.DataFrame(trace_records), hide_index=True, width="stretch")
 
-    st.subheader("Interactive packet transmission")
+    st.subheader("Packet-flow playback")
     st.caption(
         "Play the recorded channel events step by step. DATA travels sender → "
         "wireless channel → receiver; ACK travels in the reverse direction. "
@@ -512,7 +555,7 @@ else:
     else:
         st.info("No channel events were recorded for this run.")
 
-    st.subheader("Congestion-window behaviour")
+    st.subheader("Congestion-window dynamics")
     selected_label = st.selectbox("Choose a scenario trace", list(SCENARIOS))
     selected_result = results[selected_label]
     st.plotly_chart(
@@ -523,7 +566,7 @@ else:
         width="stretch",
     )
 
-    st.subheader("Adaptive recovery decisions")
+    st.subheader("Recovery decision log")
     decision_rows = []
     for label, result in results.items():
         for time_ms, decision, trigger in result["adaptive_decisions"]:
