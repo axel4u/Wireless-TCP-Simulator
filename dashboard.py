@@ -314,8 +314,9 @@ st.markdown(
         white-space:normal;
         overflow:visible;
         opacity:1 !important;
-        padding:3px 2px 7px;
-        margin:0 0 .55rem 0;
+        padding:12px 4px 12px;
+        margin:10px 0 .75rem 0;
+        transform:translateY(8px);
         text-shadow:none;
     }
     [data-testid="stMarkdown"] { overflow:visible !important; }
